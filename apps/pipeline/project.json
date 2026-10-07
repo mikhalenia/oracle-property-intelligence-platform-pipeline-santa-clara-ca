@@ -9,7 +9,7 @@
       "command": "tsc -p {projectRoot}/tsconfig.lib.json --noEmit"
     },
     "cli": {
-      "command": "tsx apps/pipeline/src/cli.ts",
+      "command": "tsx --tsconfig tsconfig.base.json apps/pipeline/src/cli.ts",
       "options": {
         "cwd": "{workspaceRoot}"
       }
