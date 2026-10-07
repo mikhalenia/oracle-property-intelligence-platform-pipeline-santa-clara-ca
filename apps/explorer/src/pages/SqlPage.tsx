@@ -127,6 +127,9 @@ export function SqlPage() {
           <Typography variant="body2">
             {result.rows.length} {result.rows.length === 1 ? "row" : "rows"} · {result.ms} ms
           </Typography>
+          {result.rows.length > 1000 && (
+            <Typography variant="body2">Showing first 1000 of {result.rows.length} rows</Typography>
+          )}
           <TableContainer component={Paper} sx={{ maxHeight: 480 }}>
             <Table size="small" stickyHeader>
               <TableHead>

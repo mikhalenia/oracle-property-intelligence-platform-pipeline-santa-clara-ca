@@ -14,7 +14,7 @@ import {
 import { getManifest, getRuns, type Manifest } from "../api";
 import { CopyButton } from "../CopyButton";
 import { bytes, shortCid, shortHash } from "../format";
-import { GATEWAYS, gatewayUrl } from "../gateways";
+import { GATEWAYS, VENDOR_GATEWAY, gatewayUrl } from "../gateways";
 import { useAsync } from "../useAsync";
 import { VerificationMatrix } from "./VerificationMatrix";
 
@@ -107,7 +107,7 @@ function ManifestBody({
         Previous manifest:{" "}
         {manifest.previousManifestCid ? (
           <Link
-            href={gatewayUrl(manifest.previousManifestCid, "ipfs.filebase.io")}
+            href={gatewayUrl(manifest.previousManifestCid, VENDOR_GATEWAY)}
             target="_blank"
             rel="noreferrer"
           >

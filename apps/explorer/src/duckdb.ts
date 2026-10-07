@@ -1,4 +1,5 @@
 import type { AsyncDuckDB } from "@duckdb/duckdb-wasm";
+import { DataType } from "apache-arrow";
 import { VENDOR_GATEWAY, gatewayUrl } from "./gateways";
 
 let dbPromise: Promise<AsyncDuckDB> | null = null;
@@ -53,8 +54,19 @@ export interface SqlResult {
   rows: unknown[][];
 }
 
-function cell(v: unknown): unknown {
-  return typeof v === "bigint" ? v.toString() : v;
+/** Make an Arrow value safe to render/serialize: BigInt -> string, Date -> ISO, nested walked. */
+export function cell(v: unknown, temporal = false): unknown {
+  if (typeof v === "bigint") return temporal ? new Date(Number(v)).toISOString() : v.toString();
+  if (v instanceof Date) return v.toISOString();
+  if (typeof v === "number" && temporal) return new Date(v).toISOString();
+  if (Array.isArray(v)) return v.map((x) => cell(x));
+  if (v !== null && typeof v === "object") {
+    const maybe = v as { toJSON?: () => unknown };
+    const plain = typeof maybe.toJSON === "function" ? maybe.toJSON() : v;
+    if (plain !== v) return cell(plain);
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, cell(x)]));
+  }
+  return v;
 }
 
 export async function runSql(sql: string): Promise<SqlResult> {
@@ -63,9 +75,12 @@ export async function runSql(sql: string): Promise<SqlResult> {
   try {
     const table = await conn.query(sql);
     const columns = table.schema.fields.map((f) => f.name);
+    const temporal = table.schema.fields.map(
+      (f) => DataType.isTimestamp(f.type) || DataType.isDate(f.type),
+    );
     const rows = table.toArray().map((r) => {
       const o = r.toJSON() as Record<string, unknown>;
-      return columns.map((c) => cell(o[c]));
+      return columns.map((c, i) => cell(o[c], temporal[i] === true));
     });
     return { columns, rows };
   } finally {
