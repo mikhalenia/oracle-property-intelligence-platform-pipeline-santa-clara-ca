@@ -4,7 +4,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exportRun } from "./commands/export";
 import { ingest } from "./commands/ingest";
+import { publish } from "./commands/publish";
 import { applySchema, openDb } from "./db/duck";
+import { filebaseUploader } from "./publish/filebase";
 import { newRunId } from "./run-id";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -50,7 +52,34 @@ async function main(): Promise<void> {
     }
     return;
   }
-  if (["publish", "verify", "sync", "run"].includes(cmd)) {
+  if (cmd === "publish") {
+    const accessKey = process.env["FILEBASE_ACCESS_KEY"];
+    const secretKey = process.env["FILEBASE_SECRET_KEY"];
+    const bucket = process.env["FILEBASE_BUCKET"];
+    if (!accessKey || !secretKey || !bucket)
+      throw new Error("FILEBASE_ACCESS_KEY, FILEBASE_SECRET_KEY and FILEBASE_BUCKET must be set");
+    const db = await openDb(dbPath);
+    try {
+      await applySchema(db);
+      const latest = (
+        await db.all<{ run_id: string }>("SELECT run_id FROM runs ORDER BY started_at DESC LIMIT 1")
+      )[0];
+      if (!latest) throw new Error("no runs found; run ingest first");
+      const manifest = await publish({
+        db,
+        runId: latest.run_id,
+        exportDir: process.env["SCC_EXPORT_DIR"] ?? join(repoRoot, "exports"),
+        uploader: filebaseUploader({ accessKey, secretKey, bucket }),
+        docsRunsDir: join(repoRoot, "docs/runs"),
+        now: new Date().toISOString(),
+      });
+      console.log(JSON.stringify(manifest, null, 2));
+    } finally {
+      await db.close();
+    }
+    return;
+  }
+  if (["verify", "sync", "run"].includes(cmd)) {
     console.log(`${cmd}: not implemented yet`);
     return;
   }

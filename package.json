@@ -33,8 +33,14 @@
     "vitest": "^5.0.3"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1146.0",
+    "@aws-sdk/lib-storage": "^3.1146.0",
     "@duckdb/node-api": "1.5.6-r.1",
+    "@ipld/car": "^5.4.7",
+    "blockstore-core": "^7.0.1",
     "csv-parse": "^7.0.3",
-    "dotenv": "^18.0.5"
+    "dotenv": "^18.0.5",
+    "ipfs-unixfs-importer": "^17.1.1",
+    "multiformats": "^14.0.5"
   }
 }
