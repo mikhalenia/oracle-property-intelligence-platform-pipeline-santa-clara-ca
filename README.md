@@ -123,4 +123,55 @@ The pipeline must demonstrate that data is ingested on an ongoing basis (not a o
 
 ## Candidate implementation
 
-The pipeline implementation lives in this repository (nx + pnpm + TypeScript). See `CLAUDE.md` for the layout and workflow, and `docs/superpowers/specs/2026-10-07-santa-clara-pipeline-design.md` for the design.
+### Live URLs
+
+- REST and MCP API (Cloudflare Worker): https://scc-pipeline-api.mikhalenia-a.workers.dev (`/api/health`, `/api/runs`, `/api/manifest`, `/api/properties/radius`, `/api/leads/aged-roofs`, `/api/leads/open-permits`, `/api/properties/:apn`, `/api/contractors/:id`, `POST /mcp`)
+- Explorer UI (Cloudflare Pages, planned URL, deployed after this section was written): https://scc-explorer.pages.dev
+
+### What was built
+
+An nx + pnpm + TypeScript pipeline that loads Santa Clara County parcels (County open data, Socrata) and City of San José building permits (CKAN CSVs) into DuckDB with per-record provenance and hash-based change detection, derives roofing flags, permit states, contractors, observed owners and roof age from roofing permits, exports Parquet, publishes the export as a CIDv1 UnixFS directory plus CAR to Filebase, verifies retrieval from public gateways, and syncs a snapshot to Cloudflare D1. A Worker serves the snapshot over REST and MCP (seven tools), and an Explorer app shows runs, sources, the manifest and a DuckDB-WASM SQL panel. Two runs exist so far (see `docs/runs/`). Coverage is limited: permits are San José only, and owner, year built and BBB data are not available from free sources. See `docs/limitations.md`.
+
+### Architecture
+
+- `apps/pipeline`: CLI with `ingest`, `export`, `publish`, `verify`, `sync`, and `run` (designed to chain them; at the time of writing `run` is a stub in `apps/pipeline/src/cli.ts` that prints "not implemented yet")
+- `libs/sources`: Socrata and CKAN fetchers that attach provenance (source key, URL, version, fetch time, page SHA-256, record hash)
+- `libs/domain`: pure rules (APN normalization, roofing classifier, permit state, roof age, contractor names, geo)
+- `apps/mcp-server`: Cloudflare Worker (Hono, MCP Streamable HTTP at `/mcp`, same handlers as REST) over D1
+- `apps/explorer`: React + MUI + Vite on Cloudflare Pages, DuckDB-WASM reading published Parquet by CID
+- Storage: DuckDB locally; Parquet and CAR on IPFS via Filebase; D1 holds the served snapshot
+- Scheduling: `.github/workflows/ingest.yml`, daily at 00:30 UTC (after San José's 16:00 PT refresh) and on demand
+
+Deviation from the team kit's Golden Path: Cloudflare (Workers, D1, Pages) instead of AWS/CDK, because the assignment requires zero idle cost for Oracle. Everything is serverless and nothing runs always-on.
+
+### Reproduce locally
+
+```sh
+nvm use
+pnpm install
+cp .env.example .env   # fill FILEBASE_ACCESS_KEY, FILEBASE_SECRET_KEY, FILEBASE_BUCKET, CLOUDFLARE_ACCOUNT_ID
+pnpm nx run pipeline:cli -- ingest
+pnpm nx run pipeline:cli -- export
+pnpm nx run pipeline:cli -- publish
+pnpm nx run pipeline:cli -- verify
+pnpm nx run pipeline:cli -- sync    # needs wrangler authenticated (CLOUDFLARE_API_TOKEN)
+pnpm check                           # lint, typecheck, test, build for every project
+```
+
+`ingest` and `export` need no secrets. `publish` needs the Filebase variables; `sync` needs Cloudflare credentials.
+
+### Scheduled ingestion
+
+`ingest.yml` runs `pipeline run` daily and on `workflow_dispatch` (one run at a time, 90 minute timeout), caches `data/santa-clara.duckdb` between runs, and commits new `docs/runs/*.json` back to the repository. Repository secrets required: `FILEBASE_ACCESS_KEY`, `FILEBASE_SECRET_KEY`, `FILEBASE_BUCKET`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (the Cloudflare pair is used only by `sync`).
+
+### Where the CIDs are
+
+Each run writes `docs/runs/<run_id>.json` with the run record, manifest CID, the manifest (every artifact: `cid`, `name`, `size`, `codec`, `sha256`) and verification results. Published CIDs are immutable and past records are not rewritten. Run `2026-10-07T17-10-54Z` (complete): manifest `bafybeidav5d5sigbbrvfhaexjxa6nqszyfmcpscyhqpnuv65hribw7y4jq`, snapshot root `bafybeict6ibbchgt3ymi7v4re7354kfvwnryuoqpa4bjfa3moicfeoswiu`. The live manifest is also at `/api/manifest`.
+
+### Documents
+
+- [Design](docs/superpowers/specs/2026-10-07-santa-clara-pipeline-design.md)
+- [Source catalog](docs/sources.md)
+- [Limitations](docs/limitations.md)
+- [Demo script](docs/demo-script.md)
+- [Agent guide](CLAUDE.md)
