@@ -14,6 +14,11 @@
       "options": { "cwd": "apps/mcp-server" },
       "cache": true
     },
+    "build": {
+      "command": "wrangler deploy --dry-run --outdir dist",
+      "options": { "cwd": "apps/mcp-server" },
+      "outputs": ["{projectRoot}/dist"]
+    },
     "deploy": {
       "command": "wrangler deploy",
       "options": { "cwd": "apps/mcp-server" }
