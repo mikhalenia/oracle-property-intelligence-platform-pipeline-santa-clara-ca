@@ -69,7 +69,6 @@ export async function* fetchParcelPages(
   fetcher: Fetcher,
   opts: {
     pageSize?: number;
-    maxPages?: number;
     outDir: string;
     sourceVersion: string;
     fetchedAt: string;
@@ -78,7 +77,7 @@ export async function* fetchParcelPages(
 ): AsyncGenerator<{ pageIndex: number; rows: ParcelRow[]; skippedNoApn: number }> {
   const pageSize = opts.pageSize ?? 10_000;
   await mkdir(opts.outDir, { recursive: true });
-  for (let pageIndex = 0; pageIndex < (opts.maxPages ?? Infinity); pageIndex++) {
+  for (let pageIndex = 0; ; pageIndex++) {
     const url = `${PARCELS_URL}?$order=objectid&$limit=${pageSize}&$offset=${pageIndex * pageSize}`;
     const { bytes, raws } = await fetchAndRead(
       fetcher,

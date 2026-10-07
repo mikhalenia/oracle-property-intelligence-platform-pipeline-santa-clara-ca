@@ -26,14 +26,6 @@ export function resolveSql(template: string, base: string): string {
   return template.replaceAll("{{base}}", base);
 }
 
-/**
- * Data-profile ruling: the long-open roofing example must also count expired-unfinaled permits.
- * Published sql-examples.json may still say `= 'open'`; patch it client-side.
- */
-export function patchOpenPermitExample(sql: string): string {
-  return sql.replaceAll("permit_state = 'open'", "permit_state IN ('open','expired_unfinaled')");
-}
-
 export interface SqlExample {
   id: string;
   title: string;
@@ -45,8 +37,7 @@ export const baseFor = (rootCid: string) => gatewayUrl(rootCid, VENDOR_GATEWAY);
 export async function loadExamples(rootCid: string): Promise<SqlExample[]> {
   const res = await fetch(gatewayUrl(rootCid, VENDOR_GATEWAY, "sql-examples.json"));
   if (!res.ok) throw new Error(`sql-examples.json responded ${res.status}`);
-  const items = (await res.json()) as SqlExample[];
-  return items.map((e) => ({ ...e, sql: patchOpenPermitExample(e.sql) }));
+  return (await res.json()) as SqlExample[];
 }
 
 export interface SqlResult {
