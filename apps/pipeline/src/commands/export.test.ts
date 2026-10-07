@@ -49,7 +49,14 @@ describe("exportRun", () => {
     await db.run(
       `INSERT INTO properties VALUES ('A1','1 Main','San Jose','95112','SAN JOSE',NULL,37.3,-121.8,'k','http://prop','pv1','2026-10-08 00:00:00','h','h','r1','r1','r1'),('B2','2 Main','San Jose','95112','SAN JOSE',NULL,37.3,-121.8,'k','http://prop2','pv1','2026-10-08 00:00:00','h','h','r1','r1','r1')`,
     );
-    const permit = (n: string, apn: string, state: string, roofing: boolean, issue: string, cid: string) =>
+    const permit = (
+      n: string,
+      apn: string,
+      state: string,
+      roofing: boolean,
+      issue: string,
+      cid: string,
+    ) =>
       `('${n}','${apn}','s','${state}',${roofing},'work',NULL,NULL,NULL,'${issue}',NULL,10,NULL,NULL,NULL,NULL,NULL,'ACME Roofing',NULL,'${cid}',NULL,'k','http://permit/${n}','pv-${n}',${trail})`;
     await db.run(
       `INSERT INTO permits VALUES ${[
@@ -62,7 +69,9 @@ describe("exportRun", () => {
     await db.run(
       `INSERT INTO contractors VALUES ('c1','ACME Roofing',NULL,2,2,'LIC123','active','exact','A+',${src})`,
     );
-    await db.run(`INSERT INTO roof_age VALUES ('A1','2020-01-01',6,'permit','high','P-OLD-OPEN',${src})`);
+    await db.run(
+      `INSERT INTO roof_age VALUES ('A1','2020-01-01',6,'permit','high','P-OLD-OPEN',${src})`,
+    );
     await db.run(
       `INSERT INTO owners VALUES ('A1','OLD OWNER','2021-05-01','P-OLD-OPEN',${src}),('A1','NEW OWNER','2023-05-01','P-NEW-FINAL',${src}),('A1','UNDATED OWNER',NULL,'P-NONROOF',${src})`,
     );
@@ -83,6 +92,10 @@ describe("exportRun", () => {
       property_source_url: "http://prop",
       permit_source_url: "http://permit/P-OLD-OPEN",
     });
+    // open permit: days_open measured from issue_date to the run's as_of (2026-10-09)
+    expect(Number(rows[0]!["days_open"])).toBe(
+      Math.round((Date.UTC(2026, 9, 9) - Date.UTC(2020, 0, 1)) / 86_400_000),
+    );
     const runs = JSON.parse(readFileSync(join(res.dir, "runs.json"), "utf8"));
     expect(runs.map((r: { runId: string }) => r.runId)).toEqual(["r2", "r1"]);
     await db.close();

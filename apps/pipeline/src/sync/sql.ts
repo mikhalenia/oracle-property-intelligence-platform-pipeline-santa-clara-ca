@@ -1,5 +1,15 @@
-import { createHash } from "node:crypto";
-import { withTransaction, type Db } from "../db/duck";
+import type { Db } from "../db/duck";
+import { Batcher, Chunker, sqlLiteral } from "./batch";
+import {
+  bootstrapState,
+  hashRow,
+  loadStoredState,
+  PendingWriter,
+  resetPendingState,
+} from "./derived-state";
+
+export { sqlLiteral } from "./batch";
+export { commitDerivedState } from "./derived-state";
 
 /** D1 column order per table; must match apps/mcp-server/migrations/0001_snapshot.sql. */
 export const D1_COLUMNS = {
@@ -103,13 +113,6 @@ function selectExpr(table: D1Table, c: string): string {
   return TEXT_COLUMNS.has(c) ? `${c}::TEXT AS ${c}` : c;
 }
 
-export function sqlLiteral(v: unknown): string {
-  if (v === null || v === undefined) return "NULL";
-  if (typeof v === "boolean") return v ? "1" : "0";
-  if (typeof v === "number") return Number.isFinite(v) ? String(v) : "NULL";
-  return `'${String(v).replace(/'/g, "''")}'`;
-}
-
 export type SyncMode = "full" | "incremental";
 
 const PK = {
@@ -134,15 +137,9 @@ const HASHED = [
 type HashedTable = (typeof HASHED)[number];
 const isHashed = (t: D1Table): t is HashedTable => (HASHED as readonly string[]).includes(t);
 
-/** Provenance columns that change on every refetch without any data change; left out of the hash. */
-const HASH_EXCLUDE = new Set(["fetched_at", "source_version"]);
-
 const rowKey = (t: D1Table, r: Record<string, unknown>): string =>
   PK[t].map((c) => String(r[c])).join("|");
-const rowHash = (t: D1Table, r: Record<string, unknown>): string =>
-  sha256(
-    JSON.stringify(D1_COLUMNS[t].filter((c) => !HASH_EXCLUDE.has(c)).map((c) => r[c] ?? null)),
-  );
+const rowHash = (t: D1Table, r: Record<string, unknown>): string => hashRow(D1_COLUMNS[t], r);
 
 /** Reads a table (optionally filtered) in key order, in pages. */
 async function* readTable(
@@ -162,76 +159,12 @@ async function* readTable(
   }
 }
 
-/**
- * Computes and commits derived_sync_state from the current tables WITHOUT generating statements,
- * as if a full sync had just completed. Use when D1 already holds the snapshot for this data.
- */
+/** See `bootstrapState`: hashes the current tables as if a full sync had just completed. */
 export async function bootstrapDerivedState(db: Db, batchSize = 500): Promise<number> {
-  await db.run("DELETE FROM derived_sync_pending");
-  for (const t of HASHED) {
-    let flat: string[] = [];
-    for await (const r of readTable(db, t, "", batchSize)) {
-      flat.push(rowKey(t, r), rowHash(t, r));
-      if (flat.length >= 1000) {
-        await savePending(db, t, flat);
-        flat = [];
-      }
-    }
-    await savePending(db, t, flat);
-  }
-  await commitDerivedState(db);
-  return (await db.all<{ n: number }>("SELECT count(*)::INT AS n FROM derived_sync_state"))[0]!.n;
-}
-
-const sha256 = (s: string): string => createHash("sha256").update(s).digest("hex");
-
-/** Groups tuples into size-bound statements and statements into files. */
-class Chunker {
-  private pending: string[] = [];
-  constructor(private readonly perFile: number) {}
-  /** Adds a statement; returns a file body when enough statements have accumulated. */
-  add(stmt: string): string | undefined {
-    this.pending.push(stmt);
-    return this.pending.length >= this.perFile ? this.take() : undefined;
-  }
-  take(): string | undefined {
-    if (this.pending.length === 0) return undefined;
-    const out = `${this.pending.join("\n")}\n`;
-    this.pending = [];
-    return out;
-  }
-}
-
-/** Accumulates tuples under `head`/`tail`, emitting a statement when the size or row bound is hit. */
-class Batcher {
-  private tuples: string[] = [];
-  private size: number;
-  constructor(
-    private readonly head: string,
-    private readonly tail: string,
-    private readonly maxRows: number,
-    private readonly maxBytes: number,
-  ) {
-    this.size = head.length + 1;
-  }
-  add(tuple: string): string | undefined {
-    let out: string | undefined;
-    if (
-      this.tuples.length > 0 &&
-      (this.size + tuple.length + 2 > this.maxBytes || this.tuples.length >= this.maxRows)
-    )
-      out = this.flush();
-    this.tuples.push(tuple);
-    this.size += tuple.length + 2;
-    return out;
-  }
-  flush(): string | undefined {
-    if (this.tuples.length === 0) return undefined;
-    const out = `${this.head}${this.tuples.join(",\n")}${this.tail}`;
-    this.tuples = [];
-    this.size = this.head.length + 1;
-    return out;
-  }
+  return bootstrapState(db, HASHED, async function* (t) {
+    for await (const r of readTable(db, t as HashedTable, "", batchSize))
+      yield { key: rowKey(t as HashedTable, r), hash: rowHash(t as HashedTable, r) };
+  });
 }
 
 const inList = (ids: readonly string[]): string => ids.map(sqlLiteral).join(", ");
@@ -243,7 +176,7 @@ export type BuildOptions = {
   mode?: SyncMode;
   /**
    * Incremental only: runs whose changes are pushed (default `[runId]`). Pass every run since the last
-   * successful sync so a missed sync is not lost.
+   * successful sync so a missed sync is not lost; `[]` means the run was already synced.
    */
   changedRunIds?: string[];
   batchSize?: number;
@@ -252,17 +185,6 @@ export type BuildOptions = {
   /** Filled with the number of rows written (inserted + deleted keys) per table. */
   stats?: Record<string, number>;
 };
-
-/**
- * Replaces `derived_sync_state` with the state computed by the last `buildD1Statements` run.
- * Call only after every statement was executed successfully against D1.
- */
-export async function commitDerivedState(db: Db): Promise<void> {
-  await withTransaction(db, async () => {
-    await db.run("DELETE FROM derived_sync_state");
-    await db.run("INSERT INTO derived_sync_state SELECT * FROM derived_sync_pending");
-  });
-}
 
 export async function* buildD1Statements(db: Db, opts: BuildOptions): AsyncGenerator<string> {
   const mode = opts.mode ?? "full";
@@ -274,13 +196,8 @@ export async function* buildD1Statements(db: Db, opts: BuildOptions): AsyncGener
   const changed = opts.changedRunIds ?? [opts.runId];
   const runList = inList(changed);
 
-  await db.run("DELETE FROM derived_sync_pending");
-  const stored = new Map<string, string>();
-  if (mode === "incremental")
-    for (const r of await db.all<{ t: string; k: string; h: string }>(
-      'SELECT "table" AS t, key AS k, row_hash AS h FROM derived_sync_state',
-    ))
-      stored.set(`${r.t}\u0000${r.k}`, r.h);
+  await resetPendingState(db);
+  const stored = mode === "incremental" ? await loadStoredState(db) : new Map<string, string>();
 
   if (mode === "full") yield `${D1_TABLES.map((t) => `DELETE FROM ${t};`).join("\n")}\n`;
 
@@ -326,6 +243,7 @@ export async function* buildD1Statements(db: Db, opts: BuildOptions): AsyncGener
     };
 
     if (mode === "incremental" && table === "properties") {
+      if (changed.length === 0) continue; // already-synced run: nothing new to push
       const removed = (
         await db.all<{ key: string }>(
           `SELECT DISTINCT key FROM removed_keys WHERE "table" = '${table}' AND run_id IN (${runList}) ORDER BY key`,
@@ -337,9 +255,9 @@ export async function* buildD1Statements(db: Db, opts: BuildOptions): AsyncGener
         yield* emit(batcher.add(tupleOf(table, r)));
       }
     } else if (mode === "incremental" && table === "runs") {
-      const ids = new Set(changed);
+      const ids = new Set([...changed, opts.runId]);
       for (const r of await db.all<{ p: string | null }>(
-        `SELECT previous_run_id AS p FROM runs WHERE run_id IN (${runList})`,
+        `SELECT previous_run_id AS p FROM runs WHERE run_id IN (${inList([...ids])})`,
       ))
         if (r.p) ids.add(r.p);
       for await (const r of readRows(table, `WHERE run_id IN (${inList([...ids])})`)) {
@@ -349,18 +267,17 @@ export async function* buildD1Statements(db: Db, opts: BuildOptions): AsyncGener
     } else if (isHashed(table)) {
       const t = table;
       const seen = new Set<string>();
-      const fresh: string[] = [];
+      const pending = new PendingWriter(db, t);
       for await (const r of readRows(t, "")) {
         const key = rowKey(t, r);
         const hash = rowHash(t, r);
         seen.add(key);
-        fresh.push(key, hash);
-        if (fresh.length >= 1000) await savePending(db, t, fresh.splice(0));
+        await pending.add(key, hash);
         if (mode === "incremental" && stored.get(`${t}\u0000${key}`) === hash) continue;
         stats[t] = (stats[t] ?? 0) + 1;
         yield* emit(batcher.add(tupleOf(t, r)));
       }
-      await savePending(db, t, fresh);
+      await pending.flush();
       if (mode === "incremental") {
         const gone: string[] = [];
         for (const k of stored.keys()) {
@@ -385,13 +302,4 @@ export async function* buildD1Statements(db: Db, opts: BuildOptions): AsyncGener
   yield "INSERT INTO snapshot (id, run_id, manifest_cid, synced_at) VALUES " +
     `(1, ${sqlLiteral(opts.runId)}, ${sqlLiteral(opts.manifestCid)}, ${sqlLiteral(new Date().toISOString())}) ` +
     "ON CONFLICT(id) DO UPDATE SET run_id=excluded.run_id, manifest_cid=excluded.manifest_cid, synced_at=excluded.synced_at;\n";
-}
-
-/** `flat` is [key, hash, key, hash, ...]. */
-async function savePending(db: Db, table: string, flat: string[]): Promise<void> {
-  if (flat.length === 0) return;
-  const tuples: string[] = [];
-  for (let i = 0; i < flat.length; i += 2)
-    tuples.push(`(${sqlLiteral(table)}, ${sqlLiteral(flat[i])}, ${sqlLiteral(flat[i + 1])})`);
-  await db.run(`INSERT INTO derived_sync_pending VALUES ${tuples.join(", ")}`);
 }

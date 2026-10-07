@@ -2,7 +2,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Db } from "../db/duck";
 import { bootstrapDerivedState, buildD1Statements, type SyncMode } from "../sync/sql";
-import { writeSyncState } from "../sync/state";
+import { chooseMode, readSyncState, writeSyncState } from "../sync/state";
 
 /**
  * Generates and executes the D1 statements. Does NOT commit the derived-state table: the caller
@@ -69,4 +69,43 @@ export async function bootstrapSyncState(opts: {
     bootstrapped: true,
   });
   return { runId, stateRows };
+}
+
+/**
+ * Picks the sync mode for `runId`. Incremental needs the marker from a previous successful sync, a
+ * populated derived_sync_state, and a marker run that is not newer than the target. When the marker
+ * run IS the target (re-sync), nothing is pushed except the runs/snapshot upserts. Syncs that predate
+ * the marker (no marker, empty state) fall back to full; `full: true` is the only other full path.
+ */
+export async function planSync(opts: {
+  db: Db;
+  dataDir: string;
+  runId: string;
+  full: boolean;
+}): Promise<{ mode: SyncMode; changedRunIds: string[]; alreadySyncedRun?: string }> {
+  const state = await readSyncState(opts.dataDir);
+  const derivedStateRows = Number(
+    (await opts.db.all<{ n: number }>("SELECT count(*) AS n FROM derived_sync_state"))[0]?.n ?? 0,
+  );
+  let changedRunIds: string[] = [];
+  let known = false;
+  if (state && state.runId === opts.runId) known = true;
+  else if (state) {
+    changedRunIds = (
+      await opts.db.all<{ run_id: string }>(
+        `SELECT run_id FROM runs WHERE started_at > (SELECT started_at FROM runs WHERE run_id = ?)
+         AND started_at <= (SELECT started_at FROM runs WHERE run_id = ?) ORDER BY started_at`,
+        [state.runId, opts.runId],
+      )
+    ).map((r) => r.run_id);
+    known = changedRunIds.length > 0;
+  }
+  const mode = chooseMode({ full: opts.full, derivedStateRows, lastSyncedRunKnown: known }, state);
+  return {
+    mode,
+    changedRunIds: mode === "incremental" ? changedRunIds : [opts.runId],
+    ...(mode === "incremental" && state?.runId === opts.runId
+      ? { alreadySyncedRun: state.runId }
+      : {}),
+  };
 }

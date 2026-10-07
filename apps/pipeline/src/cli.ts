@@ -8,8 +8,8 @@ import { exportRun } from "./commands/export";
 import { ingest } from "./commands/ingest";
 import { publish } from "./commands/publish";
 import { runPipeline } from "./commands/run";
-import { bootstrapSyncState, sync } from "./commands/sync";
-import { chooseMode, clearSyncState, readSyncState, writeSyncState } from "./sync/state";
+import { bootstrapSyncState, planSync, sync } from "./commands/sync";
+import { clearSyncState, writeSyncState } from "./sync/state";
 import { commitDerivedState } from "./sync/sql";
 import { verifyManifest } from "./commands/verify";
 import { applySchema, openDb, type Db } from "./db/duck";
@@ -144,31 +144,16 @@ async function syncStep(runId?: string, forceFull = false): Promise<void> {
     const latest = await resolveRun(db, runId);
     if (!latest.manifest_cid)
       throw new Error(`run ${latest.run_id} is not published; run publish first`);
-    // Incremental needs (a) the marker from a previous successful sync, (b) a populated
-    // derived_sync_state to diff the rebuilt tables against. Only syncs from this code write both
-    // (full mode populates them too); earlier full syncs wrote neither, so they fall back to full.
-    const state = await readSyncState(dataDir);
-    const derivedStateRows = Number(
-      (await db.all<{ n: number }>("SELECT count(*) AS n FROM derived_sync_state"))[0]?.n ?? 0,
-    );
-    const changedRunIds = state
-      ? (
-          await db.all<{ run_id: string }>(
-            `SELECT run_id FROM runs WHERE started_at > (SELECT started_at FROM runs WHERE run_id = ?)
-             AND started_at <= (SELECT started_at FROM runs WHERE run_id = ?) ORDER BY started_at`,
-            [state.runId, latest.run_id],
-          )
-        ).map((r) => r.run_id)
-      : [];
-    const mode = chooseMode(
-      {
-        full: forceFull,
-        derivedStateRows,
-        lastSyncedRunKnown: changedRunIds.length > 0 && changedRunIds.includes(latest.run_id),
-      },
-      state,
-    );
+    const plan = await planSync({
+      db,
+      dataDir,
+      runId: latest.run_id,
+      full: forceFull,
+    });
+    const { mode, changedRunIds } = plan;
     console.log(`D1 sync mode: ${mode}`);
+    if (plan.alreadySyncedRun)
+      console.log(`nothing changed since ${plan.alreadySyncedRun}; pushing hash diffs only`);
     if (mode === "full") await clearSyncState(dataDir);
     let migrated = false;
     const res = await sync({

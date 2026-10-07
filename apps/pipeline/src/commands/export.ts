@@ -5,10 +5,11 @@ import { SQL_EXAMPLES } from "../sql-examples";
 
 const TABLES = ["properties", "permits", "contractors", "owners", "roof_age"] as const;
 
-const LEADS_SQL = `
+const leadsSql = (asOf: string): string => `
   SELECT p.apn, p.situs_address, p.situs_city, p.situs_zip, p.jurisdiction, p.lat, p.lon,
          r.roof_date, r.roof_age_years, r.anchor AS roof_age_anchor, r.confidence AS roof_age_confidence, r.permit_number AS roof_age_permit,
-         lp.permit_number, lp.permit_state, lp.days_open, lp.issue_date, lp.final_date, lp.work_description, lp.contractor_company, lp.contractor_id,
+         lp.permit_number, lp.permit_state,
+         CASE WHEN lp.permit_state = 'finaled' THEN lp.days_open ELSE date_diff('day', lp.issue_date, DATE '${sqlString(asOf)}')::INTEGER END AS days_open, lp.issue_date, lp.final_date, lp.work_description, lp.contractor_company, lp.contractor_id,
          c.cslb_license_number, c.cslb_status, c.bbb_rating,
          o.owner_name, o.observed_on AS owner_observed_on,
          p.source_url AS property_source_url, p.source_version AS property_source_version, p.fetched_at AS property_fetched_at,
@@ -25,22 +26,35 @@ const copyParquet = (db: Db, select: string, path: string) =>
 
 export async function exportRun(
   db: Db,
-  opts: { runId: string; outDir: string },
+  opts: { runId: string; outDir: string; asOf?: string },
 ): Promise<{ dir: string; files: string[] }> {
   const dir = join(opts.outDir, opts.runId);
   await mkdir(dir, { recursive: true });
   const files: string[] = [];
+  // days_open is stored only for finaled permits; open/expired ones are measured to the run's as_of.
+  const asOf =
+    opts.asOf ??
+    (
+      await db.all<{ as_of: string }>("SELECT as_of::TEXT AS as_of FROM runs WHERE run_id = ?", [
+        opts.runId,
+      ])
+    )[0]?.as_of;
+  if (!asOf) throw new Error(`run ${opts.runId} not found; cannot compute days_open`);
   for (const t of TABLES) {
     await copyParquet(db, `SELECT * FROM ${t}`, join(dir, `${t}.parquet`));
     files.push(`${t}.parquet`);
   }
-  await copyParquet(db, LEADS_SQL, join(dir, "leads.parquet"));
+  await copyParquet(db, leadsSql(asOf), join(dir, "leads.parquet"));
   files.push("leads.parquet");
 
   const runs = await db.all<{ record: string }>("SELECT record FROM runs ORDER BY started_at DESC");
   await writeFile(
     join(dir, "runs.json"),
-    JSON.stringify(runs.map((r) => JSON.parse(r.record)), null, 2),
+    JSON.stringify(
+      runs.map((r) => JSON.parse(r.record)),
+      null,
+      2,
+    ),
   );
 
   const counts: Record<string, number> = {};
