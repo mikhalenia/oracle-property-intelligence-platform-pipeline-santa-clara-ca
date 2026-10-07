@@ -1,4 +1,5 @@
 import { createReadStream } from "node:fs";
+import { pipeline } from "node:stream";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse } from "csv-parse";
@@ -173,9 +174,9 @@ export async function* parsePermitsCsv(
     fetchedAt: meta.fetchedAt,
     pageSha256: meta.pageSha256,
   };
-  const parser = createReadStream(path).pipe(
-    parse({ columns: true, bom: true, relax_column_count: true, trim: false }),
-  );
+  const parser = parse({ columns: true, bom: true, relax_column_count: true, trim: false });
+  // pipeline() forwards read-stream errors (e.g. ENOENT) to the parser so iteration rejects.
+  pipeline(createReadStream(path), parser, () => undefined);
   for await (const raw of parser as AsyncIterable<RawPermit>) {
     const row = mapPermit(raw, meta.key, prov);
     if (row) yield row;

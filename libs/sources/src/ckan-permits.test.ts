@@ -82,4 +82,18 @@ describe("ckan permits", () => {
     const b = mapPermit(raw, "active", { ...prov, fetchedAt: "t2", pageSha256: "h2" });
     expect(a?.recordHash).toBe(b?.recordHash);
   });
+
+  it("rejects when the file cannot be read", async () => {
+    const iterate = async () => {
+      const rows = parsePermitsCsv("/nonexistent.csv", {
+        key: "active",
+        sourceUrl: "u",
+        sourceVersion: "v",
+        fetchedAt: "t",
+        pageSha256: "h",
+      });
+      await rows.next();
+    };
+    await expect(iterate()).rejects.toThrow(/ENOENT/);
+  });
 });
