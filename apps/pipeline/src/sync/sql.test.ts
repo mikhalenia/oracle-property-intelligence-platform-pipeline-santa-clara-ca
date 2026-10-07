@@ -61,8 +61,16 @@ describe("buildD1Statements", () => {
     const db = await seed();
     const chunks = await collect(db);
     await db.close();
-    expect(chunks[0]).toMatch(/^DELETE FROM properties;/);
-    for (const t of ["properties", "permits", "contractors", "owners", "roof_age", "runs"])
+    expect(chunks[0]).toMatch(/^DELETE FROM snapshot;/);
+    for (const t of [
+      "snapshot",
+      "properties",
+      "permits",
+      "contractors",
+      "owners",
+      "roof_age",
+      "runs",
+    ])
       expect(chunks[0]).toContain(`DELETE FROM ${t};`);
     const props = chunks.filter((c) => c.startsWith("INSERT INTO properties "));
     expect(props).toHaveLength(2);

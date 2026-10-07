@@ -8,6 +8,8 @@ export type PipelineSteps = {
   publish: (runId: string) => Promise<void | "skipped">;
   verify: (runId: string) => Promise<void>;
   sync: (runId: string) => Promise<void>;
+  /** Run id of the latest published run whose snapshot D1 has not received (null when in sync). */
+  unsyncedPublishedRun?: () => Promise<string | null>;
 };
 
 export type PipelineResult = { ok: boolean; runId?: string | undefined; summary: string };
@@ -28,12 +30,25 @@ export async function runPipeline(steps: PipelineSteps): Promise<PipelineResult>
     done.push("ingest");
     for (const name of ORDER) {
       current = name;
-      if ((await steps[name](runId)) === "skipped")
+      if ((await steps[name](runId)) === "skipped") {
+        // the skipped run adds nothing, but an earlier published run may still be waiting for D1
+        const pending = (await steps.unsyncedPublishedRun?.()) ?? null;
+        if (pending) {
+          current = "sync";
+          await steps.sync(pending);
+          done.push("sync");
+          return {
+            ok: true,
+            runId,
+            summary: `${label()}: completed ${done.join(", ")}; publish skipped (nothing changed), synced earlier published run ${pending}`,
+          };
+        }
         return {
           ok: true,
           runId,
           summary: `${label()}: completed ${done.join(", ")}; ${name} skipped (nothing changed), so verify and sync were not run`,
         };
+      }
       done.push(name);
     }
   } catch (err) {

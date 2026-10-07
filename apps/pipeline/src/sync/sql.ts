@@ -209,7 +209,10 @@ export async function* buildD1Statements(db: Db, opts: BuildOptions): AsyncGener
   await resetPendingState(db);
   const stored = mode === "incremental" ? await loadStoredState(db) : new Map<string, string>();
 
-  if (mode === "full") yield `${D1_TABLES.map((t) => `DELETE FROM ${t};`).join("\n")}\n`;
+  // the snapshot row goes first: a full sync that dies partway leaves D1 without a snapshot marker,
+  // so the next full sync is allowed (and the probe sees "empty")
+  if (mode === "full")
+    yield `DELETE FROM snapshot;\n${D1_TABLES.map((t) => `DELETE FROM ${t};`).join("\n")}\n`;
 
   const readRows = (table: D1Table, where: string) => readTable(db, table, where, batchSize);
 

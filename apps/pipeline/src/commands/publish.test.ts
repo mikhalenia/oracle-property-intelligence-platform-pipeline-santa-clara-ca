@@ -153,6 +153,24 @@ describe("publish", () => {
       await db.close();
     });
 
+    it("does not skip an unchanged run when an unpublished changed run sits between", async () => {
+      const { exportDir, docsRunsDir, expected, db } = await setup();
+      const changed = JSON.stringify({ sources: { "scc-parcels": { skipped: false } } });
+      await db.run(
+        "INSERT INTO runs VALUES ('r1','2026-10-01 00:00:00',NULL,'2026-10-01','complete','{}','bafkreiprev',NULL)",
+      );
+      await db.run(
+        `INSERT INTO runs VALUES ('rA','2026-10-05 00:00:00',NULL,'2026-10-05','complete','${changed}',NULL,'r1')`,
+      );
+      await db.run(
+        `INSERT INTO runs VALUES ('r2','2026-10-08 00:00:00',NULL,'2026-10-08','complete','${skippedRecord}',NULL,'rA')`,
+      );
+      const { uploader } = fakeUploader(expected.rootCid);
+      const res = await publish({ db, runId: "r2", exportDir, uploader, docsRunsDir, now: "x" });
+      expect("manifest" in res).toBe(true);
+      await db.close();
+    });
+
     it("publishes an unchanged run when no earlier run was published", async () => {
       const { exportDir, docsRunsDir, expected, db } = await setup();
       await db.run(

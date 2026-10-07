@@ -76,6 +76,34 @@ describe("sync", () => {
     await db.close();
   });
 
+  describe("bootstrapSyncState after skipped days", () => {
+    const rec = (skipped: boolean) => JSON.stringify({ sources: { a: { skipped } } });
+    async function make(newerSkipped: boolean) {
+      const db = await openDb(":memory:");
+      await applySchema(db);
+      await db.run(
+        "INSERT INTO properties VALUES ('A1','x','y','z','j','t',1,2,'k','u','v','2026-10-01 00:00:00','h','h','r','r','r')",
+      );
+      await db.run(
+        `INSERT INTO runs VALUES ('r1','2026-10-01 00:00:00',NULL,'2026-10-01','complete','${rec(false)}','c1',NULL),
+         ('r2','2026-10-02 00:00:00',NULL,'2026-10-02','complete','${rec(newerSkipped)}',NULL,'r1')`,
+      );
+      return { db, dataDir: mkdtempSync(join(tmpdir(), "boot2-")) };
+    }
+    it("allows --run X when every newer run is all-skipped", async () => {
+      const { db, dataDir } = await make(true);
+      expect((await bootstrapSyncState({ db, dataDir, runId: "r1" })).runId).toBe("r1");
+      await db.close();
+    });
+    it("refuses when a newer run changed a source", async () => {
+      const { db, dataDir } = await make(false);
+      await expect(bootstrapSyncState({ db, dataDir, runId: "r1" })).rejects.toThrow(
+        /cannot bootstrap.*r2/,
+      );
+      await db.close();
+    });
+  });
+
   describe("planSync", () => {
     const d1 = (runId: string | null) => async () => runId;
     async function setup(marker: string | null) {
@@ -170,11 +198,29 @@ describe("sync", () => {
       await b.db.close();
     });
 
+    it("accepts incremental when D1 holds a run between the marker and the target", async () => {
+      const { db, dataDir } = await setup("r1");
+      expect(
+        (await planSync({ db, dataDir, runId: "r3", full: false, d1SnapshotRunId: d1("r2") }))
+          .changedRunIds,
+      ).toEqual(["r2", "r3"]);
+      await db.close();
+    });
+
+    it("refuses incremental when D1 holds an unknown run or one newer than the target", async () => {
+      const { db, dataDir } = await setup("r1");
+      for (const d of ["rX", "r3", null])
+        await expect(
+          planSync({ db, dataDir, runId: "r2", full: false, d1SnapshotRunId: d1(d) }),
+        ).rejects.toThrow(/D1 holds run/);
+      await db.close();
+    });
+
     it("refuses incremental when D1 holds a different run than the local marker", async () => {
       const { db, dataDir } = await setup("r1");
       await expect(
-        planSync({ db, dataDir, runId: "r3", full: false, d1SnapshotRunId: d1("r2") }),
-      ).rejects.toThrow(/D1 holds run r2 but the local sync marker says r1/);
+        planSync({ db, dataDir, runId: "r3", full: false, d1SnapshotRunId: d1("rX") }),
+      ).rejects.toThrow(/D1 holds run rX but the local sync marker says r1/);
       await db.close();
     });
   });
@@ -187,6 +233,17 @@ describe("sync", () => {
       expect(parseD1SnapshotRunId('banner\n[{"results":[{"run_id":"r8"}]}]\n')).toBe("r8");
       expect(parseD1SnapshotRunId('[{"results":[],"success":true,"meta":{}}]')).toBeNull();
       expect(() => parseD1SnapshotRunId("not json")).toThrow(/unexpected wrangler output/);
+      expect(parseD1SnapshotRunId('[{"results":[{"run_id":null}]}]')).toBeNull();
+      expect(parseD1SnapshotRunId('[{"results":[{}]}]')).toBeNull();
+      for (const bad of [
+        "[]",
+        "[{}]",
+        '[{"results":{}}]',
+        '[{"results":[{"run_id":5}]}]',
+        "[null]",
+        '{"a":1}',
+      ])
+        expect(() => parseD1SnapshotRunId(bad), bad).toThrow(/unexpected wrangler output/);
     });
   });
 });

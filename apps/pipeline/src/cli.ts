@@ -9,7 +9,7 @@ import { ingest } from "./commands/ingest";
 import { publish } from "./commands/publish";
 import { runPipeline } from "./commands/run";
 import { bootstrapSyncState, parseD1SnapshotRunId, planSync, sync } from "./commands/sync";
-import { clearSyncState, writeSyncState } from "./sync/state";
+import { clearSyncState, readSyncState, writeSyncState } from "./sync/state";
 import { commitDerivedState } from "./sync/sql";
 import { recordVerification, verifyManifest } from "./commands/verify";
 import { applySchema, openDb, type Db } from "./db/duck";
@@ -220,6 +220,18 @@ async function syncStep(runId?: string, forceFull = false): Promise<void> {
   });
 }
 
+async function unsyncedPublishedRunStep(): Promise<string | null> {
+  const latest = (
+    await withDb((db) =>
+      db.all<{ run_id: string }>(
+        "SELECT run_id FROM runs WHERE manifest_cid IS NOT NULL ORDER BY started_at DESC LIMIT 1",
+      ),
+    )
+  )[0];
+  if (!latest) return null;
+  return (await readSyncState(dataDir))?.runId === latest.run_id ? null : latest.run_id;
+}
+
 async function main(): Promise<void> {
   if (cmd === "ingest") await ingestStep();
   else if (cmd === "export") await exportStep();
@@ -237,6 +249,7 @@ async function main(): Promise<void> {
       publish: (runId) => publishStep(runId, force),
       verify: verifyStep,
       sync: syncStep,
+      unsyncedPublishedRun: unsyncedPublishedRunStep,
     });
     console.log(res.summary);
     if (!res.ok) process.exitCode = 1;

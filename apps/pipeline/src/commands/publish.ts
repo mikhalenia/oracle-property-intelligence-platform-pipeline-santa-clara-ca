@@ -45,13 +45,22 @@ export async function publish(opts: {
   if (existing?.manifest_cid)
     throw new Error(`run ${runId} already published as ${existing.manifest_cid}`);
   const prevPublished = (
-    await db.all<{ run_id: string }>(
-      "SELECT run_id FROM runs WHERE manifest_cid IS NOT NULL AND run_id <> ? ORDER BY started_at DESC LIMIT 1",
+    await db.all<{ run_id: string; started_at: string }>(
+      "SELECT run_id, started_at::TEXT AS started_at FROM runs WHERE manifest_cid IS NOT NULL AND run_id <> ? ORDER BY started_at DESC LIMIT 1",
       [runId],
     )
   )[0];
-  if (!opts.force && prevPublished && existing && allSourcesSkipped(existing.record))
-    return { skipped: true, previousRunId: prevPublished.run_id };
+  if (!opts.force && prevPublished && existing) {
+    // every run since the last PUBLISHED one (this run included) must be unchanged, otherwise an
+    // unpublished changed run in between would never reach the published snapshot
+    const since = await db.all<{ record: string }>(
+      `SELECT record::TEXT AS record FROM runs WHERE started_at > ?::TIMESTAMP
+       AND started_at <= (SELECT started_at FROM runs WHERE run_id = ?)`,
+      [prevPublished.started_at, runId],
+    );
+    if (since.length > 0 && since.every((r) => allSourcesSkipped(r.record)))
+      return { skipped: true, previousRunId: prevPublished.run_id };
+  }
   const packed = await packDirectory(dir, EXPORT_FILES);
 
   await uploader.putFile(`${runId}/${runId}.car`, packed.carPath, { import: "car" });
@@ -107,7 +116,7 @@ export async function publish(opts: {
 }
 
 /** True when the run record shows every source unchanged (`skipped`) since the previous run. */
-function allSourcesSkipped(record: string): boolean {
+export function allSourcesSkipped(record: string): boolean {
   const sources = Object.values(
     (JSON.parse(record) as { sources?: Record<string, { skipped?: boolean }> }).sources ?? {},
   );

@@ -1,6 +1,7 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Db } from "../db/duck";
+import { allSourcesSkipped } from "./publish";
 import { bootstrapDerivedState, buildD1Statements, type SyncMode } from "../sync/sql";
 import { chooseMode, readSyncState, writeSyncState } from "../sync/state";
 
@@ -49,16 +50,25 @@ export async function bootstrapSyncState(opts: {
   dataDir: string;
   runId?: string | undefined;
 }): Promise<{ runId: string; stateRows: number }> {
-  const latest = (
-    await opts.db.all<{ run_id: string; manifest_cid: string | null }>(
-      "SELECT run_id, manifest_cid FROM runs ORDER BY started_at DESC LIMIT 1",
-    )
-  )[0];
+  const runs = await opts.db.all<{
+    run_id: string;
+    manifest_cid: string | null;
+    record: string;
+  }>("SELECT run_id, manifest_cid, record::TEXT AS record FROM runs ORDER BY started_at DESC");
+  const latest = runs[0];
   if (!latest) throw new Error("no runs found; run ingest first");
   const runId = opts.runId ?? latest.run_id;
-  if (latest.run_id !== runId || !latest.manifest_cid)
+  const idx = runs.findIndex((r) => r.run_id === runId);
+  const target = runs[idx];
+  if (!target || !target.manifest_cid)
     throw new Error(
-      `cannot bootstrap: run ${runId} must be the newest local run and published (newest is ${latest.run_id}${latest.manifest_cid ? "" : ", unpublished"})`,
+      `cannot bootstrap: run ${runId} must exist locally and be published (${target ? "it is unpublished" : "unknown run"})`,
+    );
+  // newer runs are fine only when they changed nothing, so the local tables still equal run X's
+  const changedNewer = runs.slice(0, idx).filter((r) => !allSourcesSkipped(r.record));
+  if (changedNewer.length > 0)
+    throw new Error(
+      `cannot bootstrap: run ${runId} is not current; newer run(s) ${changedNewer.map((r) => r.run_id).join(", ")} changed sources, so local tables differ from its snapshot`,
     );
   const stateRows = await bootstrapDerivedState(opts.db);
   await writeSyncState(opts.dataDir, {
@@ -73,15 +83,28 @@ export async function bootstrapSyncState(opts: {
 
 /** Run id in D1's `snapshot` row, from `wrangler d1 execute --json` output (null when empty). */
 export function parseD1SnapshotRunId(stdout: string): string | null {
+  const bad = (why: string, cause?: unknown): Error =>
+    new Error(
+      `unexpected wrangler output (${why}); cannot tell whether D1 is empty, aborting sync: ${stdout.slice(0, 200)}`,
+      cause ? { cause } : undefined,
+    );
+  let out: unknown;
   try {
     // tolerate banner lines around the JSON array
-    const json = stdout.slice(stdout.indexOf("["), stdout.lastIndexOf("]") + 1);
-    const out = JSON.parse(json) as Array<{ results?: Array<{ run_id?: unknown }> }>;
-    const runId = out[0]?.results?.[0]?.run_id;
-    return typeof runId === "string" ? runId : null;
+    out = JSON.parse(stdout.slice(stdout.indexOf("["), stdout.lastIndexOf("]") + 1));
   } catch (err) {
-    throw new Error(`unexpected wrangler output: ${stdout.slice(0, 200)}`, { cause: err });
+    throw bad("not JSON", err);
   }
+  const first = Array.isArray(out) ? (out[0] as { results?: unknown } | undefined) : undefined;
+  if (!first || typeof first !== "object" || !Array.isArray(first.results))
+    throw bad("no results array");
+  const row = first.results[0] as { run_id?: unknown } | undefined;
+  if (row === undefined) return null;
+  if (row === null || typeof row !== "object") throw bad("malformed row");
+  const runId = row.run_id;
+  if (runId === undefined || runId === null) return null;
+  if (typeof runId !== "string") throw bad("run_id is not a string");
+  return runId;
 }
 
 /**
@@ -92,7 +115,7 @@ export function parseD1SnapshotRunId(stdout: string): string | null {
  * A full sync starts by deleting every D1 table and exceeds the daily write budget, so an implicit
  * full sync (no `full: true`) is REFUSED when D1 already holds a snapshot: the operator either
  * bootstraps the local state from that snapshot or passes `--full` deliberately. Incremental is
- * refused when D1 holds a different run than the local marker (the diff would be against the wrong base).
+ * accepted when D1 holds the marker run or a run between the marker and the target, else refused.
  */
 export async function planSync(opts: {
   db: Db;
@@ -133,9 +156,15 @@ export async function planSync(opts: {
           `or pass --full to rewrite D1 deliberately.`,
       );
     }
-    if (mode === "incremental" && d1RunId !== state?.runId)
+    // D1 at the marker, or at a run between the marker and the target (a sync that pushed D1 but
+    // died before writing the marker): pushing everything since the marker is idempotent
+    if (
+      mode === "incremental" &&
+      d1RunId !== state?.runId &&
+      !(d1RunId && changedRunIds.includes(d1RunId))
+    )
       throw new Error(
-        `D1 holds run ${d1RunId ?? "(none)"} but the local sync marker says ${state?.runId}; ` +
+        `D1 holds run ${d1RunId ?? "(none)"} but the local sync marker says ${state?.runId}, and it is not between the marker and ${opts.runId}; ` +
           `bootstrap the state for the D1 run ("pipeline sync --bootstrap-state --run <run>") or pass --full.`,
       );
   }

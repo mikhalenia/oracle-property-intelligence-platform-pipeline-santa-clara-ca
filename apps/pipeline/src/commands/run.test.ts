@@ -70,4 +70,24 @@ describe("runPipeline", () => {
       "run run-1: completed ingest, export; publish skipped (nothing changed), so verify and sync were not run",
     );
   });
+
+  it("syncs the last published run when publish is skipped and the marker is behind", async () => {
+    const f = fakes();
+    const steps = {
+      ...f.steps,
+      publish: async () => "skipped" as const,
+      unsyncedPublishedRun: async () => "run-0",
+    };
+    const res = await runPipeline(steps);
+    expect(f.calls).toEqual(["ingest", "export:run-1", "sync:run-0"]);
+    expect(res.ok).toBe(true);
+    expect(res.summary).toContain("synced earlier published run run-0");
+    const none = fakes();
+    await runPipeline({
+      ...none.steps,
+      publish: async () => "skipped",
+      unsyncedPublishedRun: async () => null,
+    });
+    expect(none.calls).toEqual(["ingest", "export:run-1"]);
+  });
 });
