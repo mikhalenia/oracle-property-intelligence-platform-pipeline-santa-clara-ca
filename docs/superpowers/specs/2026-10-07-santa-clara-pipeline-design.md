@@ -22,7 +22,7 @@ Success for this milestone:
 
 - County: Santa Clara, CA (FIPS 06085). Permits: City of San José only in this milestone; the
   other 15 jurisdictions are catalogued as gaps.
-- Budget: zero. Cloudflare free tier (Pages, Workers, D1), Filebase free tier (IPFS pinning),
+- Budget: zero. Cloudflare free tier (Workers with static assets, D1), Filebase free tier (IPFS pinning),
   GitHub Actions free minutes. No AWS. The team kit's Golden Path prescribes AWS + CDK; this
   submission deviates deliberately because the assignment requires zero ongoing cost, and the
   deviation is documented in the PR.
@@ -136,7 +136,7 @@ recorded in `runs.limitations`.
   `get_property`, `get_contractor`, `list_runs`, `get_manifest`. Every response includes
   `provenance` (source url, version, fetched_at) and the `manifest_cid` of the snapshot.
   Inputs validated with Zod.
-- **Explorer** (nx app `explorer`, React + MUI + Vite on Cloudflare Pages): run summary
+- **Explorer** (nx app `explorer`, React + MUI + Vite on a Cloudflare Worker with static assets): run summary
   (sources, versions, counts, deltas, limitations), records by source, artifact manifest with
   CIDs and gateway links derived from CIDs, verification results, and a DuckDB-WASM SQL panel
   that reads the published Parquet straight from an IPFS gateway by CID (proves the data is
@@ -186,3 +186,12 @@ CLAUDE.md             conventions for agents working in this repo
 Other 15 permit jurisdictions, Assessor roll (owner mailing address, transfer dates, year
 built), BBB ratings, SOS business registry, Atlas registration (requires a code-owner merge),
 IPNS (CID history is the pointer), per-parcel Assessor PDF scraping (terms prohibit resale).
+
+## 11. Decisions
+
+- CKAN CSVs for San José permits instead of the San José ArcGIS service, which was unreachable.
+- The MCP server reads a D1 snapshot rather than querying DuckDB or IPFS at request time.
+- D1 sync is incremental, with a bootstrap mode, because of the free-tier write budget (100,000 rows/day).
+- Days open is computed at query time, not stored as a fixed value for the API.
+- The Explorer is a Cloudflare Worker with static assets instead of Pages.
+- CSLB contractor licenses are deferred.

@@ -50,3 +50,7 @@ The assignment asks for retrieval from at least two independent public gateways.
 
 The `verify` command probes the list in `apps/pipeline/src/publish/gateways.ts` and records
 per-gateway results in `verification` inside each `docs/runs/*.json`.
+
+## Days open
+
+`days_open` in `leads.parquet` is computed as of the run date for non-finaled permits; the API computes it as of today.

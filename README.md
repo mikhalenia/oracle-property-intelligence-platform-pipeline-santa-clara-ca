@@ -134,7 +134,7 @@ An nx + pnpm + TypeScript pipeline that loads Santa Clara County parcels (County
 
 ### Architecture
 
-- `apps/pipeline`: CLI with `ingest`, `export`, `publish`, `verify`, `sync`, and `run` (designed to chain them; at the time of writing `run` is a stub in `apps/pipeline/src/cli.ts` that prints "not implemented yet")
+- `apps/pipeline`: CLI with `ingest`, `export`, `publish`, `verify`, `sync`, and `run`, the chained command (`ingest → export → publish → verify → sync`, stopping at the first failure). `sync` is incremental by default (only changed rows are written to D1; the free-tier budget is 100,000 rows/day), `sync --full` rewrites everything, and `sync --bootstrap-state --run <id>` adopts an existing D1 snapshot without writes. `ingest.yml` therefore runs incremental syncs
 - `libs/sources`: Socrata and CKAN fetchers that attach provenance (source key, URL, version, fetch time, page SHA-256, record hash)
 - `libs/domain`: pure rules (APN normalization, roofing classifier, permit state, roof age, contractor names, geo)
 - `apps/mcp-server`: Cloudflare Worker (Hono, MCP Streamable HTTP at `/mcp`, same handlers as REST) over D1

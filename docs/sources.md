@@ -59,3 +59,5 @@ José's CKAN CSVs.
 13. Saratoga
 14. Sunnyvale
 15. Unincorporated Santa Clara County
+
+Note: `days_open` in `leads.parquet` is computed as of the run date for non-finaled permits; the API computes it as of today.
