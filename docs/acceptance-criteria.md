@@ -62,12 +62,12 @@ Shorthand used in the Evidence column:
 | 38 | Permit details with contractor name and BBB rating where available | partial | Permit state, years open and contractor name returned; BBB always null (`docs/limitations.md`); CSLB fields empty |
 | 39 | Properties with no ownership exchange in more than 10 years | gap | No transfer dates available (Assessor roll is paid); `docs/limitations.md` first row |
 | 40 | Properties with regional or out-of-area owners | gap | No owner mailing address available; `docs/limitations.md` first row |
-| 41 | Return source-backed answers where source data is available | met | Every API/MCP response includes the snapshot (`manifest_cid`) and per-record provenance (`docs/demo-script.md` step 10) |
+| 41 | Return source-backed answers where source data is available | met | Every API/MCP response includes the snapshot (`manifest_cid`) and per-record provenance (`source_url`, `source_version`, `fetched_at` on every row; see the `get_property` tool) |
 | **Demonstration** | | | |
-| 42 | Demonstrate the dataset through the UI | partial | `EXPLORER`; click path in `docs/demo-script.md` steps 1-8. Partial until the recorded demo video exists |
-| 43 | Demonstrate the dataset through an agent query for roofing lead discovery | partial | `POST API/mcp` tools `find_aged_roofs`, `find_open_roofing_permits` and the prompts in `docs/demo-script.md` step 9; no recorded agent session yet |
+| 42 | Demonstrate the dataset through the UI | partial | `EXPLORER` pages Runs → Sources → Manifest → SQL (default example) → Leads. Partial until the recorded demo video exists |
+| 43 | Demonstrate the dataset through an agent query for roofing lead discovery | partial | `POST API/mcp` tools `find_aged_roofs`, `find_open_roofing_permits` (prompt: properties within five miles of San José with roofs older than 15 years); no recorded agent session yet |
 | 44 | Demonstrate Oracle can operate without carrying infrastructure cost | partial | Serverless-only architecture (`README.md`); `.github/workflows/ingest.yml` schedule; design spec section 2. Partial until the demo video exists |
-| 45 | Demonstrate public CID-addressed publication with manifest and independent gateway retrieval | met | `API/api/manifest`; `RUN2` `verification`; `docs/demo-script.md` step 5 |
+| 45 | Demonstrate public CID-addressed publication with manifest and independent gateway retrieval | met | `API/api/manifest`; `RUN2` `verification` (two independent gateways per artifact); `README.md` "Where the CIDs are" |
 | 46 | Confirm the candidate fulfilled both Oracle and builder responsibilities | partial | Pipeline, publication, scheduling and access are built and live; the explicit statement is for the demo video, which is pending |
 | 47 | Pass the demo using real uploaded Santa Clara County records | partial | Real records (494,841 County parcels, 93,093 San José permits) are live; the demo recording is pending and coverage gaps above apply |
 
@@ -75,18 +75,18 @@ Shorthand used in the Evidence column:
 
 | # | Step | Status | Evidence |
 |---|---|---|---|
-| T1 | Presenter introduction: dataset loaded, queryable through DuckDB, on IPFS, UI and agent answer roofing questions | partial | True for the loaded scope only (San José permits, no owner transfer or BBB data); `docs/demo-script.md` step 0 and `docs/limitations.md` |
+| T1 | Presenter introduction: dataset loaded, queryable through DuckDB, on IPFS, UI and agent answer roofing questions | partial | True for the loaded scope only (San José permits, no owner transfer or BBB data); `docs/limitations.md` and `docs/sources.md` |
 | T2 | Open the pipeline run summary (completed run, sources, coverage, counts, timestamps, limitations) | met | `EXPLORER` Runs page; `GET API/api/runs`; `RUN2` `limitations` (four strings) |
 | T3 | Show total uploaded records by source (property, permit, ownership, contractor with BBB, business, coordinates, with timestamps and provenance) | partial | Runs/Sources pages and `RUN2` `sources` and `totals`: properties, permits, owners, contractors, roof age, coordinates. No business records; BBB null |
 | T4 | Open the DuckDB-backed query layer | met | `EXPLORER` SQL page (DuckDB-WASM reads the Parquet by CID in the browser); no Oracle-hosted database |
 | T5 | Show the published artifact manifest | met | `GET API/api/manifest`; `EXPLORER` Manifest page; manifest CID above; no IPNS used |
-| T6 | Retrieve one artifact from a public gateway, then from a second independent one | met | `RUN2` `verification`; `gateway.pinata.cloud` and `ipfs.raribleuserdata.com`; commands in `docs/demo-script.md` step 5 |
+| T6 | Retrieve one artifact from a public gateway, then from a second independent one | met | `RUN2` `verification`; `gateway.pinata.cloud` and `ipfs.raribleuserdata.com`; `pipeline verify` output in `docs/runs/*.json` |
 | T7 | Show a later incremental publish produced a new CID without mutating the previous one | met | `RUN3` `manifest.previousManifestCid` = `bafybeidav5d5sigbbrvfhaexjxa6nqszyfmcpscyhqpnuv65hribw7y4jq` (run 2); new manifest CID `bafybeihabollsxvyqj2vnhhhh6w3ouygh6pvhdjrg2nx4i5u63gjdlom64`; `RUN2` unchanged and its manifest still resolves; `properties`, `owners`, `roof_age` Parquet CIDs identical across the two manifests, other artifacts changed |
 | T8 | UI: properties within a sample radius with roofs older than 15 years (roof-age basis, coordinates, provenance) | met | `EXPLORER/leads` (Leads page, downtown San José preset, 5 miles, 15 years); `GET API/api/leads/aged-roofs?lat=37.3382&lon=-121.8863&radiusMiles=5&minRoofAgeYears=15` (962 parcels in the dataset, up to 500 per response; anchor and confidence per row) |
 | T9 | UI: open roofing permits in the area, longest open first, with contractor and BBB where available | partial | `EXPLORER/leads` (permit table, longest open first); `GET API/api/leads/open-permits?lat=37.3382&lon=-121.8863&radiusMiles=5&state=any&minOpenYears=5`; contractor shown, BBB null |
-| T10 | Agent prompt: properties within five miles of [city] with roofs older than 15 years | met | Tool `find_aged_roofs` via `POST API/mcp` (`docs/demo-script.md` step 9); the agent session itself is not yet recorded |
+| T10 | Agent prompt: properties within five miles of [city] with roofs older than 15 years | met | Tool `find_aged_roofs` via `POST API/mcp` (`README.md` MCP section shows the `tools/call` request); the agent session itself is not yet recorded |
 | T11 | Agent prompt: nearby open roofing permits open for many years and the listed contractor | partial | Tool `find_open_roofing_permits`; BBB missing is stated as an assumption; the agent session is not yet recorded |
-| T12 | Show the system is MCP-ready | met | `POST API/mcp` `tools/list` and `tools/call` (`docs/demo-script.md` step 10) |
+| T12 | Show the system is MCP-ready | met | `POST API/mcp` `tools/list` and `tools/call` (request shown in the `README.md` MCP section) |
 
 ## Counts
 

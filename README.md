@@ -177,5 +177,4 @@ Each run writes `docs/runs/<run_id>.json` with the run record, manifest CID, the
 - [Design](docs/superpowers/specs/2026-10-07-santa-clara-pipeline-design.md)
 - [Source catalog](docs/sources.md)
 - [Limitations](docs/limitations.md)
-- [Demo script](docs/demo-script.md)
 - [Agent guide](CLAUDE.md)

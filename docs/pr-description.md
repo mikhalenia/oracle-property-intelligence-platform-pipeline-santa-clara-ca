@@ -25,7 +25,6 @@
 7. Compare the two manifests (`docs/runs/2026-10-07T17-10-54Z.json` and `docs/runs/2026-10-07T18-31-50Z.json`): identical CIDs for unchanged Parquet files (`properties`, `owners`, `roof_age`), and run 3's `previousManifestCid` equals run 2's manifest CID.
 8. `curl -X POST https://scc-pipeline-api.mikhalenia-a.workers.dev/mcp -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`
 
-Full click path: `docs/demo-script.md`.
 
 ## What is in the dataset
 
