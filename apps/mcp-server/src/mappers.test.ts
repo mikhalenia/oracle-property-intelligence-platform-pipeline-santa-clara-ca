@@ -14,17 +14,28 @@ const permit = (o: Partial<PermitRow>) => toPermit({ ...nulls<PermitRow>(), ...o
 const roof = (o: Partial<RoofAgeRow>) => toRoofAge({ ...nulls<RoofAgeRow>(), ...o });
 
 describe("human-readable labels", () => {
-  it("permitStateLabel on leads and permits", () => {
-    const cases: [string | null, string | null][] = [
-      ["open", "Open"],
-      ["expired_unfinaled", "Stalled (expired without a final inspection)"],
-      ["finaled", "Completed"],
-      [null, null],
+  it("permitStateLabel, approvalsComplete and isStalled on leads and permits", () => {
+    const cases: [string | null, number | null, string | null, boolean][] = [
+      ["open", 0, "Open", false],
+      ["open", 1, "Open", false],
+      ["expired_unfinaled", 0, "Stalled (expired without a final inspection)", true],
+      ["expired_unfinaled", null, "Stalled (expired without a final inspection)", true],
+      ["expired_unfinaled", 1, "Expired (work approved, no final inspection)", false],
+      ["finaled", 0, "Completed", false],
+      [null, null, null, false],
     ];
-    for (const [state, label] of cases) {
-      expect(lead({ permit_state: state }).permitStateLabel).toBe(label);
-      expect(permit({ permit_state: state }).permitStateLabel).toBe(label);
-      expect(permit({ permit_state: state }).permitState).toBe(state);
+    for (const [state, approvals, label, stalled] of cases) {
+      const row = { permit_state: state, approvals_complete: approvals };
+      for (const m of [lead(row), permit(row)] as {
+        permitStateLabel: unknown;
+        isStalled: unknown;
+        approvalsComplete: unknown;
+      }[]) {
+        expect(m.permitStateLabel).toBe(label);
+        expect(m.isStalled).toBe(stalled);
+        expect(m.approvalsComplete).toBe(approvals === 1);
+      }
+      expect(permit(row).permitState).toBe(state);
     }
   });
 

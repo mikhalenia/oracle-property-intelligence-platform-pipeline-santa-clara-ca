@@ -103,11 +103,22 @@ export function toSnapshot(row: SnapshotRow | null) {
   };
 }
 
-const PERMIT_STATE_LABELS: Record<string, string> = {
-  open: "Open",
-  expired_unfinaled: "Stalled (expired without a final inspection)",
-  finaled: "Completed",
-};
+/** Machine state + approvals -> display label; `isStalled` = expired without a final inspection and without a completed approval. */
+function permitStateInfo(state: string | null, approvalsComplete: number | null) {
+  const complete = approvalsComplete === 1;
+  const isStalled = state === "expired_unfinaled" && !complete;
+  const permitStateLabel =
+    state === "open"
+      ? "Open"
+      : state === "finaled"
+        ? "Completed"
+        : state === "expired_unfinaled"
+          ? complete
+            ? "Expired (work approved, no final inspection)"
+            : "Stalled (expired without a final inspection)"
+          : null;
+  return { permitStateLabel, approvalsComplete: complete, isStalled };
+}
 const ROOF_BASIS_LABELS: Record<string, string> = {
   final_date: "final inspection date",
   approval_complete_issue_date: "approval completed (issue date)",
@@ -136,8 +147,7 @@ export function toLead(row: LeadRow, distanceMiles: number) {
     roofAgePermit: row.roof_age_permit,
     permitNumber: row.permit_number,
     permitState: row.permit_state,
-    permitStateLabel: label(PERMIT_STATE_LABELS, row.permit_state),
-    approvalsComplete: row.approvals_complete === 1,
+    ...permitStateInfo(row.permit_state, row.approvals_complete),
     daysOpen: row.days_open_now,
     issueDate: row.issue_date,
     finalDate: row.final_date,
@@ -184,12 +194,11 @@ export function toPermit(row: PermitRow) {
     apn: row.apn,
     status: row.status,
     permitState: row.permit_state,
-    permitStateLabel: label(PERMIT_STATE_LABELS, row.permit_state),
+    ...permitStateInfo(row.permit_state, row.approvals_complete),
     isRoofing: row.is_roofing === 1,
     workDescription: row.work_description,
     subtype: row.subtype,
     approvals: row.approvals,
-    approvalsComplete: row.approvals_complete === 1,
     issueDate: row.issue_date,
     finalDate: row.final_date,
     daysOpen: row.days_open_now,
