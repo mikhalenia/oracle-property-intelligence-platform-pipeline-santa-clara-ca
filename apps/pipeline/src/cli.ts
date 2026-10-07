@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { config } from "dotenv";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -11,7 +11,7 @@ import { runPipeline } from "./commands/run";
 import { bootstrapSyncState, parseD1SnapshotRunId, planSync, sync } from "./commands/sync";
 import { clearSyncState, writeSyncState } from "./sync/state";
 import { commitDerivedState } from "./sync/sql";
-import { verifyManifest } from "./commands/verify";
+import { recordVerification, verifyManifest } from "./commands/verify";
 import { applySchema, openDb, type Db } from "./db/duck";
 import { filebaseUploader } from "./publish/filebase";
 import type { Manifest } from "./publish/manifest";
@@ -21,6 +21,8 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 config({ path: join(repoRoot, ".env"), quiet: true });
 
 const cmd = process.argv[2] ?? "help";
+/** `publish --force` / `run --force`: publish even when every source was unchanged. */
+const force = process.argv.includes("--force");
 const dataDir = process.env["SCC_DATA_DIR"] ?? join(repoRoot, "data");
 const dbPath = join(dataDir, "santa-clara.duckdb");
 
@@ -77,23 +79,31 @@ async function exportStep(runId?: string): Promise<void> {
   });
 }
 
-async function publishStep(runId?: string): Promise<void> {
+async function publishStep(runId?: string, force = false): Promise<void | "skipped"> {
   const accessKey = process.env["FILEBASE_ACCESS_KEY"];
   const secretKey = process.env["FILEBASE_SECRET_KEY"];
   const bucket = process.env["FILEBASE_BUCKET"];
   if (!accessKey || !secretKey || !bucket)
     throw new Error("FILEBASE_ACCESS_KEY, FILEBASE_SECRET_KEY and FILEBASE_BUCKET must be set");
-  await withDb(async (db) => {
+  return withDb(async (db) => {
     const run = await resolveRun(db, runId);
-    const manifest = await publish({
+    const res = await publish({
       db,
       runId: run.run_id,
       exportDir: exportDirOf(),
       uploader: filebaseUploader({ accessKey, secretKey, bucket }),
       docsRunsDir: join(repoRoot, "docs/runs"),
       now: new Date().toISOString(),
+      force,
     });
-    console.log(JSON.stringify(manifest, null, 2));
+    if ("skipped" in res) {
+      console.log(
+        `nothing changed since ${res.previousRunId}; use --force to republish (run ${run.run_id} not published)`,
+      );
+      return "skipped" as const;
+    }
+    console.log(JSON.stringify(res.manifest, null, 2));
+    return undefined;
   });
 }
 
@@ -108,10 +118,9 @@ async function verifyStep(runIdArg?: string): Promise<void> {
     throw new Error(`no manifest for run ${runId} at ${manifestPath}; run publish first`);
   }
   const report = await verifyManifest(manifest, fetch);
-  await writeFile(join(exportDir, runId, "verification.json"), JSON.stringify(report, null, 2));
-  const runFile = join(repoRoot, "docs/runs", `${runId}.json`);
-  const record = JSON.parse(await readFile(runFile, "utf8")) as Record<string, unknown>;
-  await writeFile(runFile, JSON.stringify({ ...record, verification: report }, null, 2));
+  await withDb((db) =>
+    recordVerification({ db, runId, report, exportDir, docsRunsDir: join(repoRoot, "docs/runs") }),
+  );
   for (const a of report.artifacts)
     console.log(`${a.name} ${a.cid} ${a.independentOk}/${report.gateways.length}`);
   console.log(report.ok ? "verification ok" : "verification FAILED");
@@ -214,7 +223,7 @@ async function syncStep(runId?: string, forceFull = false): Promise<void> {
 async function main(): Promise<void> {
   if (cmd === "ingest") await ingestStep();
   else if (cmd === "export") await exportStep();
-  else if (cmd === "publish") await publishStep();
+  else if (cmd === "publish") await publishStep(undefined, force);
   else if (cmd === "verify") await verifyStep();
   else if (cmd === "sync") {
     const i = process.argv.indexOf("--run");
@@ -225,13 +234,16 @@ async function main(): Promise<void> {
     const res = await runPipeline({
       ingest: ingestStep,
       export: exportStep,
-      publish: publishStep,
+      publish: (runId) => publishStep(runId, force),
       verify: verifyStep,
       sync: syncStep,
     });
     console.log(res.summary);
     if (!res.ok) process.exitCode = 1;
-  } else console.log("usage: pipeline <ingest|export|publish|verify|sync|run>");
+  } else
+    console.log(
+      "usage: pipeline <ingest|export|publish [--force]|verify|sync [--full|--bootstrap-state] [--run <id>]|run [--force]>",
+    );
 }
 
 main().catch((err) => {

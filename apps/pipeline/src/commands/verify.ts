@@ -1,5 +1,8 @@
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { CarReader } from "@ipld/car";
 import { sha256Hex, type Fetcher } from "@scc/sources";
+import { mergeRunRecord, type Db } from "../db/duck";
 import { PUBLIC_GATEWAYS, VENDOR_GATEWAYS } from "../publish/gateways";
 import type { Manifest } from "../publish/manifest";
 
@@ -50,7 +53,14 @@ export async function verifyManifest(
     const independentOk = results.filter(
       (r) => r.sha256Match && !VENDOR_GATEWAYS.includes(r.gateway),
     ).length;
-    artifacts.push({ cid: a.cid, name: a.name, codec: a.codec, size: a.size, results, independentOk });
+    artifacts.push({
+      cid: a.cid,
+      name: a.name,
+      codec: a.codec,
+      size: a.size,
+      results,
+      independentOk,
+    });
   }
   return {
     runId: manifest.runId,
@@ -67,8 +77,14 @@ async function checkBody(a: Target, bytes: Uint8Array): Promise<{ match: boolean
     try {
       const reader = await CarReader.fromBytes(bytes);
       const root = (await reader.getRoots())[0];
-      if (!root || root.toString() !== a.cid) return { match: false, note: `CAR root ${root?.toString() ?? "none"} != ${a.cid}` };
-      if (!(await reader.has(root))) return { match: false, note: "CAR does not contain its root block" };
+      if (!root || root.toString() !== a.cid)
+        return { match: false, note: `CAR root ${root?.toString() ?? "none"} != ${a.cid}` };
+      const block = await reader.get(root);
+      if (!block) return { match: false, note: "CAR does not contain its root block" };
+      if (block.bytes.length !== a.size)
+        return { match: false, note: `root block size ${block.bytes.length} != ${a.size}` };
+      if (sha256Hex(block.bytes) !== a.sha256)
+        return { match: false, note: "root block sha256 mismatch" };
       return { match: true };
     } catch (err) {
       return { match: false, note: `invalid CAR: ${String(err)}` };
@@ -113,11 +129,46 @@ async function fetchOne(
         });
       }
       const { match, note } = await checkBody(a, bytes);
-      return done({ gateway, status: res.status, bytes: bytes.length, sha256Match: match, ...(note ? { note } : {}) });
+      return done({
+        gateway,
+        status: res.status,
+        bytes: bytes.length,
+        sha256Match: match,
+        ...(note ? { note } : {}),
+      });
     } catch (err) {
-      if (last) return done({ gateway, status: "error", bytes: 0, sha256Match: false, note: String(err).slice(0, 120) });
+      if (last)
+        return done({
+          gateway,
+          status: "error",
+          bytes: 0,
+          sha256Match: false,
+          note: String(err).slice(0, 120),
+        });
       await wait();
     }
   }
   return done({ gateway, status: "error", bytes: 0, sha256Match: false });
+}
+
+/**
+ * Persists a verification report: `exports/<run>/verification.json`, the run's `docs/runs` record,
+ * and the DuckDB run record, so the next D1 sync carries it to the Explorer.
+ */
+export async function recordVerification(opts: {
+  db: Db;
+  runId: string;
+  report: VerificationReport;
+  exportDir: string;
+  docsRunsDir: string;
+}): Promise<void> {
+  const { db, runId, report } = opts;
+  await writeFile(
+    join(opts.exportDir, runId, "verification.json"),
+    JSON.stringify(report, null, 2),
+  );
+  const runFile = join(opts.docsRunsDir, `${runId}.json`);
+  const record = JSON.parse(await readFile(runFile, "utf8")) as Record<string, unknown>;
+  await writeFile(runFile, JSON.stringify({ ...record, verification: report }, null, 2));
+  await mergeRunRecord(db, runId, { verification: report });
 }

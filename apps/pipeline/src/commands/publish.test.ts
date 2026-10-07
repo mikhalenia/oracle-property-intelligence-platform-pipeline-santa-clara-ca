@@ -55,18 +55,36 @@ describe("publish", () => {
       "INSERT INTO runs VALUES ('r2','2026-10-08 00:00:00',NULL,'2026-10-08','complete','{\"runId\":\"r2\"}',NULL,'r1')",
     );
     const { uploader, puts } = fakeUploader(expected.rootCid);
-    const manifest = await publish({
-      db, runId: "r2", exportDir, uploader, docsRunsDir, now: "2026-10-08T02:00:00Z",
+    const res = await publish({
+      db,
+      runId: "r2",
+      exportDir,
+      uploader,
+      docsRunsDir,
+      now: "2026-10-08T02:00:00Z",
     });
+    if (!("manifest" in res)) throw new Error("expected a publish");
+    const { manifest } = res;
     expect(puts[0]).toMatchObject({ key: "r2/r2.car", meta: { import: "car" } });
     expect(puts.some((p) => p.key === "r2/car/r2.car" && p.meta === undefined)).toBe(true);
     expect(manifest.previousManifestCid).toBe("bafkreiprev");
     expect(manifest.car).toMatchObject({ cid: "bafkreicar", root: expected.rootCid });
-    const rows = await db.all<{ manifest_cid: string | null }>("SELECT manifest_cid FROM runs WHERE run_id='r2'");
+    const rows = await db.all<{ manifest_cid: string | null }>(
+      "SELECT manifest_cid FROM runs WHERE run_id='r2'",
+    );
     expect(rows[0]?.manifest_cid).toBe("bafkreimanifest");
     const doc = JSON.parse(readFileSync(join(docsRunsDir, "r2.json"), "utf8"));
-    expect(doc).toMatchObject({ runId: "r2", manifestCid: "bafkreimanifest", manifest: { runId: "r2" } });
+    expect(doc).toMatchObject({
+      runId: "r2",
+      manifestCid: "bafkreimanifest",
+      manifest: { runId: "r2" },
+    });
     expect(doc.manifestSha256).toMatch(/^[0-9a-f]{64}$/);
+    // the DuckDB run record carries the full manifest so the D1 sync can serve it without a gateway
+    const rec = await db.all<{ record: string }>(
+      "SELECT record::TEXT AS record FROM runs WHERE run_id='r2'",
+    );
+    expect(JSON.parse(rec[0]!.record)).toEqual({ runId: "r2", manifest });
     await db.close();
   });
 
@@ -79,7 +97,9 @@ describe("publish", () => {
     await expect(
       publish({ db, runId: "r2", exportDir, uploader, docsRunsDir, now: "2026-10-08T02:00:00Z" }),
     ).rejects.toThrow(/expected/);
-    const rows = await db.all<{ manifest_cid: string | null }>("SELECT manifest_cid FROM runs WHERE run_id='r2'");
+    const rows = await db.all<{ manifest_cid: string | null }>(
+      "SELECT manifest_cid FROM runs WHERE run_id='r2'",
+    );
     expect(rows[0]?.manifest_cid).toBeNull();
     expect(existsSync(join(docsRunsDir, "r2.json"))).toBe(false);
     await db.close();
@@ -96,5 +116,53 @@ describe("publish", () => {
     ).rejects.toThrow("run r2 already published as bafkreidone");
     expect(puts).toHaveLength(0);
     await db.close();
+  });
+
+  describe("unchanged runs", () => {
+    const skippedRecord = JSON.stringify({
+      runId: "r2",
+      sources: {
+        "scc-parcels": { skipped: true },
+        "sj-permits-active": { skipped: true },
+      },
+    });
+
+    it("skips when every source was skipped and a previous run is published", async () => {
+      const { exportDir, docsRunsDir, expected, db } = await setup();
+      await db.run(
+        "INSERT INTO runs VALUES ('r1','2026-10-01 00:00:00',NULL,'2026-10-01','complete','{}','bafkreiprev',NULL)",
+      );
+      await db.run(
+        `INSERT INTO runs VALUES ('r2','2026-10-08 00:00:00',NULL,'2026-10-08','complete','${skippedRecord}',NULL,'r1')`,
+      );
+      const { uploader, puts } = fakeUploader(expected.rootCid);
+      const res = await publish({ db, runId: "r2", exportDir, uploader, docsRunsDir, now: "x" });
+      expect(res).toEqual({ skipped: true, previousRunId: "r1" });
+      expect(puts).toHaveLength(0);
+      expect(existsSync(join(docsRunsDir, "r2.json"))).toBe(false);
+      const forced = await publish({
+        db,
+        runId: "r2",
+        exportDir,
+        uploader,
+        docsRunsDir,
+        now: "x",
+        force: true,
+      });
+      expect("manifest" in forced && forced.manifest.runId).toBe("r2");
+      await db.close();
+    });
+
+    it("publishes an unchanged run when no earlier run was published", async () => {
+      const { exportDir, docsRunsDir, expected, db } = await setup();
+      await db.run(
+        `INSERT INTO runs VALUES ('r2','2026-10-08 00:00:00',NULL,'2026-10-08','complete','${skippedRecord}',NULL,NULL)`,
+      );
+      const { uploader, puts } = fakeUploader(expected.rootCid);
+      const res = await publish({ db, runId: "r2", exportDir, uploader, docsRunsDir, now: "x" });
+      expect("manifest" in res).toBe(true);
+      expect(puts.length).toBeGreaterThan(0);
+      await db.close();
+    });
   });
 });

@@ -56,4 +56,18 @@ describe("runPipeline", () => {
     expect(res.ok).toBe(false);
     expect(res.summary).toBe("run: completed none; failed at ingest: nope");
   });
+
+  it("ends successfully after export when publish reports nothing changed", async () => {
+    const f = fakes();
+    f.steps.publish = async (runId: string) => {
+      f.calls.push(`publish:${runId}`);
+      return "skipped" as const;
+    };
+    const res = await runPipeline(f.steps);
+    expect(f.calls).toEqual(["ingest", "export:run-1", "publish:run-1"]);
+    expect(res).toMatchObject({ ok: true, runId: "run-1" });
+    expect(res.summary).toBe(
+      "run run-1: completed ingest, export; publish skipped (nothing changed), so verify and sync were not run",
+    );
+  });
 });

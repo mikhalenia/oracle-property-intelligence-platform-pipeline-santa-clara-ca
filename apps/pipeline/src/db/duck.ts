@@ -60,3 +60,25 @@ export async function withTransaction<T>(db: Db, fn: () => Promise<T>): Promise<
     throw err;
   }
 }
+
+/**
+ * Shallow-merges `patch` into a run's JSON record (top-level keys replaced as a whole; JSON
+ * merge-patch is avoided because it would drop nested null values such as `previousManifestCid`).
+ */
+export async function mergeRunRecord(
+  db: Db,
+  runId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  const row = (
+    await db.all<{ record: string }>("SELECT record::TEXT AS record FROM runs WHERE run_id = ?", [
+      runId,
+    ])
+  )[0];
+  if (!row) throw new Error(`run ${runId} not found`);
+  const record = JSON.parse(row.record) as Record<string, unknown>;
+  await db.run("UPDATE runs SET record = ? WHERE run_id = ?", [
+    JSON.stringify({ ...record, ...patch }),
+    runId,
+  ]);
+}
