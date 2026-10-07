@@ -15,7 +15,7 @@ const LEADS_SQL = `
          lp.source_url AS permit_source_url, lp.source_version AS permit_source_version
   FROM properties p
   LEFT JOIN roof_age r USING (apn)
-  LEFT JOIN (SELECT * FROM permits WHERE is_roofing QUALIFY row_number() OVER (PARTITION BY apn ORDER BY (permit_state='open') DESC, issue_date DESC) = 1) lp USING (apn)
+  LEFT JOIN (SELECT * FROM permits WHERE is_roofing QUALIFY row_number() OVER (PARTITION BY apn ORDER BY (permit_state='open') DESC, issue_date DESC, permit_number) = 1) lp USING (apn)
   LEFT JOIN contractors c ON c.contractor_id = lp.contractor_id
   LEFT JOIN (SELECT * FROM owners QUALIFY row_number() OVER (PARTITION BY apn ORDER BY observed_on DESC NULLS LAST) = 1) o USING (apn)
   WHERE r.apn IS NOT NULL OR lp.permit_number IS NOT NULL`;
