@@ -98,6 +98,14 @@ describe("LeadsPage", () => {
     expect(screen.getAllByText(/manifest bafymanife/).length).toBe(2);
   });
 
+  it("says when a result was cut at the request limit", async () => {
+    vi.mocked(api.getOpenPermits).mockResolvedValue({ snapshot, items: [lead({ apn: "C-3" })], truncated: true });
+    render(<LeadsPage />);
+    await userEvent.click(screen.getByRole("button", { name: "Search" }));
+    expect(await screen.findByText(/Showing the first 1 matches; the request limit was reached/)).toBeInTheDocument();
+    expect(screen.getAllByText(/the request limit was reached/).length).toBe(1);
+  });
+
   it("shows API errors", async () => {
     vi.mocked(api.getAgedRoofs).mockRejectedValue(new Error("/api/leads/aged-roofs responded 500"));
     render(<LeadsPage />);

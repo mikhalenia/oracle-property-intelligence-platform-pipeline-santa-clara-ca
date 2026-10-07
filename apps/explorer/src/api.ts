@@ -139,6 +139,8 @@ export interface Lead {
 export interface LeadsResponse {
   snapshot: { runId: string | null; manifestCid: string | null; syncedAt: string | null };
   items: Lead[];
+  /** True when the result was cut at the request limit; more rows match. */
+  truncated?: boolean;
 }
 
 export interface LeadsQuery {

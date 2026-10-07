@@ -75,6 +75,12 @@ function LeadsTable({ title, res }: { title: string; res: LeadsResponse }) {
       <Typography variant="h6">
         {title} ({res.items.length})
       </Typography>
+      {res.truncated && (
+        <Alert severity="info">
+          Showing the first {res.items.length} matches; the request limit was reached, so more properties match. Narrow the radius or
+          tighten the filters to see the rest.
+        </Alert>
+      )}
       <TableContainer component={Paper}>
         <Table size="small">
           <TableHead>
