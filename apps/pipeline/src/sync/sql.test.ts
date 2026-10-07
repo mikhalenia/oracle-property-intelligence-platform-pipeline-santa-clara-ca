@@ -154,7 +154,7 @@ describe("buildD1Statements", () => {
     await commitDerivedState(db);
     expect(
       (await db.all<{ n: number }>("SELECT count(*)::INT AS n FROM derived_sync_state"))[0]!.n,
-    ).toBe(3);
+    ).toBe(4);
 
     const src = "'k','http://x','v1','2026-10-01 00:00:00'";
     await db.run(
@@ -204,12 +204,41 @@ describe("buildD1Statements", () => {
     // pending state is staged but not committed until commitDerivedState
     expect(
       (await db.all<{ n: number }>("SELECT count(*)::INT AS n FROM derived_sync_state"))[0]!.n,
-    ).toBe(3);
+    ).toBe(4);
     await commitDerivedState(db);
     const keys = await db.all<{ key: string }>(
       "SELECT key FROM derived_sync_state WHERE \"table\"='roof_age'",
     );
     expect(keys).toEqual([{ key: "A9" }]);
+    await db.close();
+  });
+
+  it("hash-tracks permits: computed-column change re-emits, unchanged and refetch do not", async () => {
+    const db = await seed();
+    for await (const _ of buildD1Statements(db, { manifestCid: "c", runId: "r1" })) void _;
+    await commitDerivedState(db);
+    const run = async (): Promise<string> => {
+      const out: string[] = [];
+      for await (const c of buildD1Statements(db, {
+        manifestCid: "c",
+        runId: "r2",
+        mode: "incremental",
+      }))
+        out.push(c);
+      return out.join("");
+    };
+    // refetch only: provenance volatility must not trigger a rewrite
+    await db.run("UPDATE permits SET fetched_at='2026-10-09 00:00:00', source_version='v2'");
+    expect(await run()).not.toContain("INTO permits");
+    // computed column only (not covered by record_hash, last_changed_run unchanged)
+    await db.run("UPDATE permits SET contractor_id='c2' WHERE permit_number='P1'");
+    const all = await run();
+    expect(all.match(/INSERT OR REPLACE INTO permits /g)).toHaveLength(1);
+    expect(all).toContain("'P1', 'A1'");
+    expect(all).toContain("'c2'");
+    // vanished permit is deleted
+    await db.run("DELETE FROM permits WHERE permit_number='P1'");
+    expect(await run()).toContain("DELETE FROM permits WHERE permit_number IN (\n'P1');");
     await db.close();
   });
 
@@ -219,7 +248,7 @@ describe("buildD1Statements", () => {
     const rows = await db.all<{ t: string }>(
       'SELECT "table" AS t FROM derived_sync_pending ORDER BY 1',
     );
-    expect(rows.map((r) => r.t)).toEqual(["contractors", "owners", "roof_age"]);
+    expect(rows.map((r) => r.t)).toEqual(["contractors", "owners", "permits", "roof_age"]);
     await db.close();
   });
 });

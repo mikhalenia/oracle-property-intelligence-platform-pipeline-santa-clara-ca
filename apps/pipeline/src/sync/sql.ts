@@ -121,8 +121,67 @@ const PK = {
   runs: ["run_id"],
 } as const satisfies Record<D1Table, readonly string[]>;
 
-const DERIVED = ["contractors", "owners", "roof_age"] as const satisfies readonly D1Table[];
-type DerivedTable = (typeof DERIVED)[number];
+/**
+ * Tables diffed by per-row hash (derived tables are rebuilt each run; permits carry computed
+ * columns not covered by record_hash). `properties` uses last_changed_run + removed_keys instead.
+ */
+const HASHED = [
+  "permits",
+  "contractors",
+  "owners",
+  "roof_age",
+] as const satisfies readonly D1Table[];
+type HashedTable = (typeof HASHED)[number];
+const isHashed = (t: D1Table): t is HashedTable => (HASHED as readonly string[]).includes(t);
+
+/** Provenance columns that change on every refetch without any data change; left out of the hash. */
+const HASH_EXCLUDE = new Set(["fetched_at", "source_version"]);
+
+const rowKey = (t: D1Table, r: Record<string, unknown>): string =>
+  PK[t].map((c) => String(r[c])).join("|");
+const rowHash = (t: D1Table, r: Record<string, unknown>): string =>
+  sha256(
+    JSON.stringify(D1_COLUMNS[t].filter((c) => !HASH_EXCLUDE.has(c)).map((c) => r[c] ?? null)),
+  );
+
+/** Reads a table (optionally filtered) in key order, in pages. */
+async function* readTable(
+  db: Db,
+  table: D1Table,
+  where: string,
+  batchSize: number,
+): AsyncGenerator<Record<string, unknown>> {
+  const select = D1_COLUMNS[table].map((c) => selectExpr(table, c)).join(", ");
+  const orderBy = PK[table].join(", ");
+  for (let offset = 0; ; offset += batchSize) {
+    const rows = await db.all<Record<string, unknown>>(
+      `SELECT ${select} FROM ${table} ${where} ORDER BY ${orderBy} LIMIT ${batchSize} OFFSET ${offset}`,
+    );
+    yield* rows;
+    if (rows.length < batchSize) break;
+  }
+}
+
+/**
+ * Computes and commits derived_sync_state from the current tables WITHOUT generating statements,
+ * as if a full sync had just completed. Use when D1 already holds the snapshot for this data.
+ */
+export async function bootstrapDerivedState(db: Db, batchSize = 500): Promise<number> {
+  await db.run("DELETE FROM derived_sync_pending");
+  for (const t of HASHED) {
+    let flat: string[] = [];
+    for await (const r of readTable(db, t, "", batchSize)) {
+      flat.push(rowKey(t, r), rowHash(t, r));
+      if (flat.length >= 1000) {
+        await savePending(db, t, flat);
+        flat = [];
+      }
+    }
+    await savePending(db, t, flat);
+  }
+  await commitDerivedState(db);
+  return (await db.all<{ n: number }>("SELECT count(*)::INT AS n FROM derived_sync_state"))[0]!.n;
+}
 
 const sha256 = (s: string): string => createHash("sha256").update(s).digest("hex");
 
@@ -225,19 +284,7 @@ export async function* buildD1Statements(db: Db, opts: BuildOptions): AsyncGener
 
   if (mode === "full") yield `${D1_TABLES.map((t) => `DELETE FROM ${t};`).join("\n")}\n`;
 
-  /** Reads a table (optionally filtered) in key order, in pages. */
-  async function* readRows(table: D1Table, where: string): AsyncGenerator<Record<string, unknown>> {
-    const cols = D1_COLUMNS[table];
-    const select = cols.map((c) => selectExpr(table, c)).join(", ");
-    const orderBy = PK[table].join(", ");
-    for (let offset = 0; ; offset += batchSize) {
-      const rows = await db.all<Record<string, unknown>>(
-        `SELECT ${select} FROM ${table} ${where} ORDER BY ${orderBy} LIMIT ${batchSize} OFFSET ${offset}`,
-      );
-      yield* rows;
-      if (rows.length < batchSize) break;
-    }
-  }
+  const readRows = (table: D1Table, where: string) => readTable(db, table, where, batchSize);
 
   const tupleOf = (table: D1Table, r: Record<string, unknown>): string =>
     `(${D1_COLUMNS[table].map((c) => sqlLiteral(r[c])).join(", ")})`;
@@ -278,7 +325,7 @@ export async function* buildD1Statements(db: Db, opts: BuildOptions): AsyncGener
       if (f) yield f;
     };
 
-    if (mode === "incremental" && (table === "properties" || table === "permits")) {
+    if (mode === "incremental" && table === "properties") {
       const removed = (
         await db.all<{ key: string }>(
           `SELECT DISTINCT key FROM removed_keys WHERE "table" = '${table}' AND run_id IN (${runList}) ORDER BY key`,
@@ -299,13 +346,13 @@ export async function* buildD1Statements(db: Db, opts: BuildOptions): AsyncGener
         stats[table] = (stats[table] ?? 0) + 1;
         yield* emit(batcher.add(tupleOf(table, r)));
       }
-    } else if ((DERIVED as readonly string[]).includes(table)) {
-      const t = table as DerivedTable;
+    } else if (isHashed(table)) {
+      const t = table;
       const seen = new Set<string>();
       const fresh: string[] = [];
       for await (const r of readRows(t, "")) {
-        const key = PK[t].map((c) => String(r[c])).join("|");
-        const hash = sha256(JSON.stringify(cols.map((c) => r[c] ?? null)));
+        const key = rowKey(t, r);
+        const hash = rowHash(t, r);
         seen.add(key);
         fresh.push(key, hash);
         if (fresh.length >= 1000) await savePending(db, t, fresh.splice(0));

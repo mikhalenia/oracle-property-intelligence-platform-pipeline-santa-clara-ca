@@ -35,7 +35,12 @@ export async function deriveAll(
     return {
       permit_number: p.permit_number,
       permit_state: state,
-      days_open: daysOpen({ state, issueDate: p.issue_date, finalDate: p.final_date, asOf }),
+      // Stored only for finaled permits (issue to final: stable). Open/expired values would change
+      // daily and force daily D1 rewrites; the Worker computes those at query time.
+      days_open:
+        state === "finaled"
+          ? daysOpen({ state, issueDate: p.issue_date, finalDate: p.final_date, asOf })
+          : null,
       contractor_id: p.contractor_company ? contractorId(p.contractor_company) : null,
     };
   });

@@ -8,6 +8,8 @@ export type SyncState = {
   mode: SyncMode;
   syncedAt: string;
   rowsWritten: number;
+  /** Set when the state was computed locally from an existing D1 snapshot, not by a sync. */
+  bootstrapped?: boolean;
 };
 
 const file = (dataDir: string): string => join(dataDir, "d1-sync-state.json");
@@ -21,6 +23,7 @@ export async function readSyncState(dataDir: string): Promise<SyncState | null> 
       mode: s.mode,
       syncedAt: String(s.syncedAt ?? ""),
       rowsWritten: Number(s.rowsWritten ?? 0),
+      ...(s.bootstrapped ? { bootstrapped: true } : {}),
     };
   } catch {
     return null;

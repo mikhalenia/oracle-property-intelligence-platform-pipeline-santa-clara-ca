@@ -8,7 +8,7 @@ import { exportRun } from "./commands/export";
 import { ingest } from "./commands/ingest";
 import { publish } from "./commands/publish";
 import { runPipeline } from "./commands/run";
-import { sync } from "./commands/sync";
+import { bootstrapSyncState, sync } from "./commands/sync";
 import { chooseMode, clearSyncState, readSyncState, writeSyncState } from "./sync/state";
 import { commitDerivedState } from "./sync/sql";
 import { verifyManifest } from "./commands/verify";
@@ -118,6 +118,13 @@ async function verifyStep(runIdArg?: string): Promise<void> {
   if (!report.ok) throw new Error("verification failed");
 }
 
+async function bootstrapStep(runId?: string): Promise<void> {
+  const res = await withDb((db) => bootstrapSyncState({ db, dataDir, runId }));
+  console.log(
+    `bootstrapped sync state for run ${res.runId} (${res.stateRows} rows); nothing written to D1`,
+  );
+}
+
 async function syncStep(runId?: string, forceFull = false): Promise<void> {
   const cwd = join(repoRoot, "apps/mcp-server");
   const wrangler = async (args: string[]): Promise<void> => {
@@ -207,8 +214,12 @@ async function main(): Promise<void> {
   else if (cmd === "export") await exportStep();
   else if (cmd === "publish") await publishStep();
   else if (cmd === "verify") await verifyStep();
-  else if (cmd === "sync") await syncStep(undefined, process.argv.includes("--full"));
-  else if (cmd === "run") {
+  else if (cmd === "sync") {
+    const i = process.argv.indexOf("--run");
+    const runArg = i >= 0 ? process.argv[i + 1] : undefined;
+    if (process.argv.includes("--bootstrap-state")) await bootstrapStep(runArg);
+    else await syncStep(runArg, process.argv.includes("--full"));
+  } else if (cmd === "run") {
     const res = await runPipeline({
       ingest: ingestStep,
       export: exportStep,
