@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { applySchema, openDb, type Db } from "../db/duck";
-import { buildD1Statements, D1_COLUMNS, sqlLiteral } from "./sql";
+import { buildD1Statements, commitDerivedState, D1_COLUMNS, sqlLiteral } from "./sql";
 
 const migration = readFileSync(
   new URL("../../../mcp-server/migrations/0001_snapshot.sql", import.meta.url),
@@ -145,5 +145,81 @@ describe("buildD1Statements", () => {
     }
     expect(stmts.some((st) => st.length > 8_000 && st.match(/\('B\d'/g)!.length === 1)).toBe(true);
     expect(Math.max(...rows)).toBe(2);
+  });
+
+  it("incremental mode writes only changed rows and diffs derived tables", async () => {
+    const db = await seed();
+    // r1 synced fully: derived state is what the first build produced.
+    for await (const _ of buildD1Statements(db, { manifestCid: "c", runId: "r1" })) void _;
+    await commitDerivedState(db);
+    expect(
+      (await db.all<{ n: number }>("SELECT count(*)::INT AS n FROM derived_sync_state"))[0]!.n,
+    ).toBe(3);
+
+    const src = "'k','http://x','v1','2026-10-01 00:00:00'";
+    await db.run(
+      `INSERT INTO runs VALUES ('r2','2026-10-02 00:00:00',NULL,'2026-10-02','complete','{"runId":"r2"}','bafyR2','r1')`,
+    );
+    await db.run("UPDATE properties SET situs_zip='99999', last_changed_run='r2' WHERE apn='A2'");
+    await db.run(
+      `INSERT INTO properties VALUES ('A4','4 OAK','SJ','95112','SJ','t',1,2,${src},'h','h','r2','r2','r2')`,
+    );
+    await db.run("DELETE FROM properties WHERE apn='A3'");
+    await db.run("INSERT INTO removed_keys VALUES ('r2','properties','A3')");
+    await db.run("DELETE FROM roof_age WHERE apn='A1'");
+    await db.run(`INSERT INTO roof_age VALUES ('A9','2021-01-01',5,'issue','high','P1',${src})`);
+
+    const stats: Record<string, number> = {};
+    const chunks: string[] = [];
+    for await (const c of buildD1Statements(db, {
+      manifestCid: "cid2",
+      runId: "r2",
+      mode: "incremental",
+      stats,
+    }))
+      chunks.push(c);
+    const all = chunks.join("");
+    expect(all).not.toMatch(/DELETE FROM \w+;/);
+    expect(all.match(/INSERT OR REPLACE INTO properties /g)).toHaveLength(1);
+    expect(all.match(/\('A\d'/g)).toHaveLength(3); // A2, A4 properties + A9 roof_age
+    expect(all).toContain("DELETE FROM properties WHERE apn IN (\n'A3');");
+    expect(all).not.toContain("INSERT OR REPLACE INTO permits");
+    expect(all).toContain("INSERT OR REPLACE INTO roof_age");
+    expect(all).toContain("DELETE FROM roof_age WHERE apn IN (\n'A1');");
+    expect(all).not.toContain("INTO contractors");
+    expect(all).not.toContain("INTO owners");
+    const runs = chunks.find((c) => c.includes("INSERT OR REPLACE INTO runs"))!;
+    expect(runs).toContain("'r2'");
+    expect(runs).toContain("'r1'");
+    expect(runs).not.toContain("'r0'");
+    expect(chunks[chunks.length - 1]).toContain("INSERT INTO snapshot");
+    expect(stats).toEqual({
+      properties: 3, // 2 replaced + 1 deleted
+      permits: 0,
+      contractors: 0,
+      owners: 0,
+      roof_age: 2,
+      runs: 2,
+    });
+    // pending state is staged but not committed until commitDerivedState
+    expect(
+      (await db.all<{ n: number }>("SELECT count(*)::INT AS n FROM derived_sync_state"))[0]!.n,
+    ).toBe(3);
+    await commitDerivedState(db);
+    const keys = await db.all<{ key: string }>(
+      "SELECT key FROM derived_sync_state WHERE \"table\"='roof_age'",
+    );
+    expect(keys).toEqual([{ key: "A9" }]);
+    await db.close();
+  });
+
+  it("full mode populates the pending derived state", async () => {
+    const db = await seed();
+    for await (const _ of buildD1Statements(db, { manifestCid: "c", runId: "r1" })) void _;
+    const rows = await db.all<{ t: string }>(
+      'SELECT "table" AS t FROM derived_sync_pending ORDER BY 1',
+    );
+    expect(rows.map((r) => r.t)).toEqual(["contractors", "owners", "roof_age"]);
+    await db.close();
   });
 });

@@ -30,9 +30,12 @@ describe("sync", () => {
         inFlight--;
       },
     });
-    await db.close();
     const dir = join(outDir, "r1", "sync");
     expect(res.files).toBe(3);
+    expect(res.mode).toBe("full");
+    expect(
+      (await db.all<{ n: number }>("SELECT count(*)::INT AS n FROM derived_sync_state"))[0]!.n,
+    ).toBe(0);
     expect(res.rows["properties"]).toBe(1);
     expect(events).toEqual([
       `start ${dir}/0000.sql`,
@@ -42,5 +45,6 @@ describe("sync", () => {
       `start ${dir}/0002.sql`,
       `end ${dir}/0002.sql`,
     ]);
+    await db.close();
   });
 });

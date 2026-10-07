@@ -93,6 +93,33 @@ describe("upsertTable", () => {
     await db.close();
   });
 
+  it("records removed keys for full-source loads only", async () => {
+    const db = await openDb(":memory:");
+    await applySchema(db);
+    const dir = mkdtempSync(join(tmpdir(), "upsert-"));
+    const load = (rows: object[], runId: string, name: string, fullSource: boolean) =>
+      upsertTable(db, {
+        table: "permits",
+        stagingNdjsonPath: ndjson(dir, name, rows),
+        key: "permit_number",
+        runId,
+        fullSource,
+      });
+    await load(
+      [permit({}), permit({ permit_number: "P2", record_hash: "h2" })],
+      "r1",
+      "a.ndjson",
+      true,
+    );
+    await load([permit({})], "r2", "b.ndjson", false);
+    expect(await db.all("SELECT * FROM removed_keys")).toEqual([]);
+    await load([permit({})], "r3", "c.ndjson", true);
+    expect(await db.all('SELECT run_id, "table", key FROM removed_keys')).toEqual([
+      { run_id: "r3", table: "permits", key: "P2" },
+    ]);
+    await db.close();
+  });
+
   it("keeps the highest-precedence duplicate within one staging file", async () => {
     const db = await openDb(":memory:");
     await applySchema(db);

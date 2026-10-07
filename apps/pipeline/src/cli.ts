@@ -9,6 +9,8 @@ import { ingest } from "./commands/ingest";
 import { publish } from "./commands/publish";
 import { runPipeline } from "./commands/run";
 import { sync } from "./commands/sync";
+import { chooseMode, clearSyncState, readSyncState, writeSyncState } from "./sync/state";
+import { commitDerivedState } from "./sync/sql";
 import { verifyManifest } from "./commands/verify";
 import { applySchema, openDb, type Db } from "./db/duck";
 import { filebaseUploader } from "./publish/filebase";
@@ -116,7 +118,7 @@ async function verifyStep(runIdArg?: string): Promise<void> {
   if (!report.ok) throw new Error("verification failed");
 }
 
-async function syncStep(runId?: string): Promise<void> {
+async function syncStep(runId?: string, forceFull = false): Promise<void> {
   const cwd = join(repoRoot, "apps/mcp-server");
   const wrangler = async (args: string[]): Promise<void> => {
     try {
@@ -135,11 +137,39 @@ async function syncStep(runId?: string): Promise<void> {
     const latest = await resolveRun(db, runId);
     if (!latest.manifest_cid)
       throw new Error(`run ${latest.run_id} is not published; run publish first`);
+    // Incremental needs (a) the marker from a previous successful sync, (b) a populated
+    // derived_sync_state to diff the rebuilt tables against. Only syncs from this code write both
+    // (full mode populates them too); earlier full syncs wrote neither, so they fall back to full.
+    const state = await readSyncState(dataDir);
+    const derivedStateRows = Number(
+      (await db.all<{ n: number }>("SELECT count(*) AS n FROM derived_sync_state"))[0]?.n ?? 0,
+    );
+    const changedRunIds = state
+      ? (
+          await db.all<{ run_id: string }>(
+            `SELECT run_id FROM runs WHERE started_at > (SELECT started_at FROM runs WHERE run_id = ?)
+             AND started_at <= (SELECT started_at FROM runs WHERE run_id = ?) ORDER BY started_at`,
+            [state.runId, latest.run_id],
+          )
+        ).map((r) => r.run_id)
+      : [];
+    const mode = chooseMode(
+      {
+        full: forceFull,
+        derivedStateRows,
+        lastSyncedRunKnown: changedRunIds.length > 0 && changedRunIds.includes(latest.run_id),
+      },
+      state,
+    );
+    console.log(`D1 sync mode: ${mode}`);
+    if (mode === "full") await clearSyncState(dataDir);
     let migrated = false;
     const res = await sync({
       db,
       runId: latest.run_id,
       manifestCid: latest.manifest_cid,
+      mode,
+      changedRunIds,
       outDir: exportDirOf(),
       exec: async (file) => {
         if (!migrated) {
@@ -159,7 +189,16 @@ async function syncStep(runId?: string): Promise<void> {
         ]);
       },
     });
+    const rowsWritten = Object.values(res.rows).reduce((a, b) => a + b, 0) + 1;
+    await commitDerivedState(db);
+    await writeSyncState(dataDir, {
+      runId: latest.run_id,
+      mode: res.mode,
+      syncedAt: new Date().toISOString(),
+      rowsWritten,
+    });
     console.log(JSON.stringify(res, null, 2));
+    console.log(`D1 rows written: ${rowsWritten.toLocaleString("en-US")} (free tier: 100,000/day)`);
   });
 }
 
@@ -168,7 +207,7 @@ async function main(): Promise<void> {
   else if (cmd === "export") await exportStep();
   else if (cmd === "publish") await publishStep();
   else if (cmd === "verify") await verifyStep();
-  else if (cmd === "sync") await syncStep();
+  else if (cmd === "sync") await syncStep(undefined, process.argv.includes("--full"));
   else if (cmd === "run") {
     const res = await runPipeline({
       ingest: ingestStep,

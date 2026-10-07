@@ -37,3 +37,7 @@ CREATE TABLE IF NOT EXISTS runs (
   run_id TEXT PRIMARY KEY, started_at TIMESTAMP NOT NULL, finished_at TIMESTAMP, as_of DATE NOT NULL,
   status TEXT NOT NULL, record JSON NOT NULL, manifest_cid TEXT, previous_run_id TEXT
 );
+
+CREATE TABLE IF NOT EXISTS removed_keys (run_id TEXT NOT NULL, "table" TEXT NOT NULL, key TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS derived_sync_state ("table" TEXT NOT NULL, key TEXT NOT NULL, row_hash TEXT NOT NULL, PRIMARY KEY ("table", key));
+CREATE TABLE IF NOT EXISTS derived_sync_pending ("table" TEXT NOT NULL, key TEXT NOT NULL, row_hash TEXT NOT NULL);

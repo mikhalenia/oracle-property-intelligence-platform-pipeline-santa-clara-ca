@@ -96,6 +96,9 @@ export async function upsertTable(
       removed = await count(
         `SELECT count(*)::INT AS n FROM ${table} t LEFT JOIN staging s USING (${key}) WHERE s.${key} IS NULL`,
       );
+      await db.run(
+        `INSERT INTO removed_keys SELECT '${runId}', '${table}', t.${key} FROM ${table} t LEFT JOIN staging s USING (${key}) WHERE s.${key} IS NULL`,
+      );
       await db.run(`DELETE FROM ${table} WHERE ${key} NOT IN (SELECT ${key} FROM staging)`);
     }
     const setList = cols
