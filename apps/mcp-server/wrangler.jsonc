@@ -8,7 +8,7 @@
     {
       "binding": "DB",
       "database_name": "scc-snapshot",
-      "database_id": "TBD-created-at-deploy",
+      "database_id": "805fbf02-45af-40b9-84e6-cef419b8deef",
       "migrations_dir": "migrations",
     },
   ],
