@@ -3,7 +3,7 @@
 - Santa Clara County pipeline: 494,841 County parcels (Socrata) and 93,093 City of San José building permits (CKAN CSVs) loaded into DuckDB with per-record provenance and hash-based change detection.
 - Derived roofing signals: 7,751 roofing permits with open / expired-without-final / finaled states, 8,920 contractors, 7,151 roof-age rows (2,021 parcels at 15 years or more).
 - Each run exports Parquet and publishes a CIDv1 UnixFS directory plus a CAR to Filebase, with a manifest; retrieval is verified from independent public gateways.
-- A Cloudflare Worker serves the snapshot over REST and MCP (seven tools); an Explorer app shows runs, sources, the manifest and a DuckDB-WASM SQL panel.
+- A Cloudflare Worker serves the snapshot over REST and MCP (seven tools); an Explorer app shows runs, a leads page over the REST endpoints, sources, the manifest with verification, and a DuckDB-WASM SQL panel.
 - Several criteria are only partly met or not met (BBB, business records, owner transfer and mailing data); see Limitations.
 
 ## Live runtime
@@ -17,7 +17,7 @@
 ## How to review in 2 minutes
 
 1. `curl -s https://scc-pipeline-api.mikhalenia-a.workers.dev/api/health | jq`
-2. Open https://scc-explorer.mikhalenia-a.workers.dev and look at Runs, Sources and Manifest.
+2. Open https://scc-explorer.mikhalenia-a.workers.dev and look at Runs, Leads, Sources and Manifest.
 3. `curl -s https://scc-pipeline-api.mikhalenia-a.workers.dev/api/manifest | jq` (CID, name, size, codec, sha256 per artifact).
 4. Fetch one artifact from two independent gateways and compare the size with the manifest: `curl -sI https://gateway.pinata.cloud/ipfs/bafkreigacann4wwdk4rvw7ujtqpxecvqnefg7tjgzrnedcqgfks7az5alu` and `curl -sI https://ipfs.raribleuserdata.com/ipfs/bafkreigacann4wwdk4rvw7ujtqpxecvqnefg7tjgzrnedcqgfks7az5alu` (`coverage.json`, 1,508 bytes).
 5. `curl -s "https://scc-pipeline-api.mikhalenia-a.workers.dev/api/leads/aged-roofs?lat=37.3382&lon=-121.8863&radiusMiles=5&minRoofAgeYears=15" | jq`
@@ -52,12 +52,13 @@ Roofing permits by state: expired_unfinaled 6,707, open 1,017, finaled 27.
 
 ## Incremental ingestion
 
-- `.github/workflows/ingest.yml` runs `pnpm nx run pipeline:cli -- run` daily at 00:30 UTC (after San José's 16:00 PT refresh) and on demand, caches the DuckDB file, and commits a new `docs/runs/*.json` per run.
+- `.github/workflows/ingest.yml` runs `pnpm nx run pipeline:cli -- run` daily at 00:30 UTC (after San José's 16:00 PT refresh) and on demand, caches `data/` (DuckDB and the D1 sync marker) even when a step fails, and commits a new `docs/runs/*.json` per run.
 - Each run records per-source inserted/updated/unchanged/removed counts, source versions and limitations. Unchanged sources are skipped by version; row changes are found by `record_hash`. Parcel change detection is dataset-level only.
 - Republishing yields a new manifest CID that points to the previous one; earlier records are never rewritten.
 - The scheduled workflow has not executed yet; both runs so far were started by hand.
 - A second published manifest is planned for the next scheduled run; until then only run 2 is published (run 1 was partial).
-- D1 note: the D1 free-tier write limit was hit on 2026-10-07, so snapshot sync is being made incremental.
+- D1 sync is incremental: `sync` writes only changed rows (the free-tier budget is 100,000 rows/day; the limit was hit on 2026-10-07), `sync --full` rewrites everything, and `sync --bootstrap-state --run <id>` adopts an existing D1 snapshot without writes. An implicit full sync over an existing D1 snapshot is refused, so a lost cache fails the job instead of wiping D1.
+- A run whose sources were all unchanged is not republished (`run --force` overrides); each publish stores about 84 MB.
 
 ## Architecture
 

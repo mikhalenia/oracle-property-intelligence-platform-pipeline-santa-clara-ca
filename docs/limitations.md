@@ -51,6 +51,47 @@ The assignment asks for retrieval from at least two independent public gateways.
 The `verify` command probes the list in `apps/pipeline/src/publish/gateways.ts` and records
 per-gateway results in `verification` inside each `docs/runs/*.json`.
 
+`ipfs.raribleuserdata.com` answers with `server: Filebase` and `x-filebase-*` headers (observed
+2026-10-07): it is a dedicated gateway run on the pinning vendor's infrastructure, so its
+independence from the vendor is weaker than its name suggests. `gateway.pinata.cloud` is
+operated separately.
+
+Verification results reach the Explorer: `verify` writes the report into the run record, the next
+`sync` carries it to D1, and the Manifest page shows it in its Verification section.
+
+## Roof age and stalled permits
+
+- Roof age comes from roofing permits only: the final inspection date (confidence high) or, when
+  there is none, the issue date of a permit whose approvals include "Complete" (confidence medium).
+- Stalled = expired without a final inspection and without a completed approval. An expired
+  permit whose approvals include "Complete" is finished work awaiting paperwork: it anchors a
+  medium-confidence roof age and is never listed as stalled or open (`approvalsComplete` in API
+  rows, `approvals_complete` and `is_stalled` in `leads.parquet`). Before this rule, 178 of the
+  200 aged-roof leads within 5 miles of downtown San José were also listed as stalled permits.
+
+## Permits that leave the feeds
+
+A permit that disappears from the San José feeds keeps its last observed state; `last_seen_run`
+(in `permits.parquet`) tells when it was last seen. Finaled permits drop out of the active,
+under-inspection and expired files, so deleting them would also delete their roof-age evidence.
+
+## Publishing cost and growth
+
+Each published run stores the CAR twice on Filebase (once imported as the DAG, once as a plain
+object fetchable by its own CID): about 84 MB per published run. `publish` therefore skips a run
+whose sources were all unchanged when an earlier run is published ("nothing changed since
+<run>; use --force to republish"), and the scheduled workflow runs plain `run`, so an unchanged
+day publishes nothing (`run --force` overrides). Roof ages in the published snapshot stay as of
+the last published run until the next publish.
+
+## D1 sync safety
+
+A full D1 sync deletes every table and exceeds the free-tier write budget, so `sync` refuses an
+implicit full sync when D1 already holds a snapshot. Without the local marker
+(`data/d1-sync-state.json`, cached by the workflow with the DuckDB file) the job fails and names
+the fix: `sync --bootstrap-state --run <D1 run id>` on a database whose newest run is the D1 run,
+or `sync --full` to rewrite D1 deliberately.
+
 ## Days open
 
 `days_open` in `leads.parquet` is computed as of the run date for non-finaled permits; the API computes it as of today.

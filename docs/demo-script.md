@@ -32,7 +32,7 @@ GitHub Actions for scheduling. Nothing is always-on.
 
 ## 3. DuckDB-backed query layer
 
-- **[Explorer]** SQL page: DuckDB-WASM reads the published Parquet from an IPFS gateway by CID in the browser. Run a pre-filled example query. No Oracle-hosted database is involved.
+- **[Explorer]** SQL page: DuckDB-WASM reads the published Parquet from an IPFS gateway by CID in the browser. The page shows the gateway in use (the first of `ipfs.raribleuserdata.com`, `gateway.pinata.cloud`, `ipfs.filebase.io` to answer a range probe). Run a pre-filled example query. No Oracle-hosted database is involved.
 - Without the Explorer: `pnpm nx run pipeline:cli -- export` writes the same Parquet locally and `duckdb` can query it.
 
 ## 4. Artifact manifest
@@ -43,15 +43,15 @@ GitHub Actions for scheduling. Nothing is always-on.
 
 ## 5. Fetch by CID from two independent gateways
 
-- **[Explorer]** Verification section of the Runs page shows per-gateway results.
+- **[Explorer]** Manifest page, Verification section: per-gateway results for every artifact and the number of independent gateways that served matching bytes (from the run record; it appears after the run's next sync).
 - Command line, any artifact CID from step 4:
 
   ```sh
   curl -sI https://gateway.pinata.cloud/ipfs/<cid>
-  curl -sI https://ipfs.ssi.eecc.de/ipfs/<cid>
+  curl -sI https://ipfs.raribleuserdata.com/ipfs/<cid>
   ```
 
-  (`ipfs.raribleuserdata.com` also worked.) Compare `content-length` and the SHA-256 of the body with the manifest.
+  Compare `content-length` and the SHA-256 of the body with the manifest.
 - Note: `ipfs.io`, `dweb.link` and `w3s.link` answered 429 "switching to a service worker gateway" on files and 522 on the directory root to non-browser clients on 2026-10-07; `ipfs.ssi.eecc.de` is intermittent (it timed out on the directory root, `properties.parquet` and the CAR in run 2's verification), while `gateway.pinata.cloud` and `ipfs.raribleuserdata.com` returned 200 on everything; `ipfs.filebase.io` is the vendor and does not count as independent. See `docs/limitations.md`.
 - Recorded results: `verification` in `docs/runs/<run_id>.json`. Re-run with `pnpm nx run pipeline:cli -- verify` (needs the local export of that run).
 
@@ -65,14 +65,14 @@ GitHub Actions for scheduling. Nothing is always-on.
 
 Center: downtown San José, 37.3382, -121.8863, 5 miles, roofs at least 15 years old.
 
-- **[Explorer]** Use the aged-roof example with those parameters.
+- **[Explorer]** Leads page (`$EXPLORER/leads`): click "Downtown San José", keep radius 5 and minimum roof age 15, click Search. The "Roofs at least 15 years old" table shows address, APN, roof age with its basis and confidence, latest permit, contractor, owner, distance and provenance (source links and the snapshot manifest CID).
 - REST:
 
   ```sh
   curl -s "$API/api/leads/aged-roofs?lat=37.3382&lon=-121.8863&radiusMiles=5&minRoofAgeYears=15" | jq
   ```
 
-- Expect 962 parcels in run 2 (2,021 county-wide at 15 years or more; the default `limit` is 200, so pass `limit=500` to see more). Each row has the roof-age basis (anchor and confidence), coordinates and provenance. Point out that roof age exists only where a roofing permit exists.
+- The API returns up to 500 rows (`limit`, default 200, maximum 500); the dataset holds 962 parcels in this radius in run 2 (2,021 county-wide at 15 years or more). Each row has the roof-age basis (anchor and confidence), coordinates and provenance. Point out that roof age exists only where a roofing permit exists.
 
 ## 8. Open roofing permits, longest open first
 
@@ -80,8 +80,8 @@ Center: downtown San José, 37.3382, -121.8863, 5 miles, roofs at least 15 years
 curl -s "$API/api/leads/open-permits?lat=37.3382&lon=-121.8863&radiusMiles=5&state=any&minOpenYears=5" | jq
 ```
 
-- **[Explorer]** Same query in the open-permits example.
-- Expect permit state (`open` or `expired_unfinaled`, labeled "expired without a final inspection (stalled)"), years open, contractor name, and provenance. BBB rating is null for every contractor; CSLB license fields are empty because matching was not done in this milestone.
+- **[Explorer]** Leads page, same search: the "Roofing permits without a final inspection" table, longest open first; the permit-state selector picks any, open or stalled.
+- Expect permit state (`open` or `expired_unfinaled`; stalled = expired without a final inspection and without a completed approval, so permits whose approvals are Complete are not listed), days open, contractor name, and provenance. BBB rating is null for every contractor; CSLB license fields are empty because matching was not done in this milestone.
 - Drill down: `curl -s $API/api/properties/<apn> | jq` and `curl -s $API/api/contractors/<id> | jq`.
 
 ## 9. Agent queries

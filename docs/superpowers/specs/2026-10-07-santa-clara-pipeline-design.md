@@ -195,3 +195,21 @@ IPNS (CID history is the pointer), per-parcel Assessor PDF scraping (terms prohi
 - Days open is computed at query time, not stored as a fixed value for the API.
 - The Explorer is a Cloudflare Worker with static assets instead of Pages.
 - CSLB contractor licenses are deferred.
+- `ingest --window <days>` (§5) was not implemented: the daily San José CSVs are full dumps of
+  each status, so the last-30-days feed adds nothing; it is downloaded for completeness and not
+  used for windowing.
+- `published_unverified` (§8) is not a run status: a failed verification is recorded as
+  `verification.ok = false` in the run record (DuckDB, `docs/runs`, and D1 after the next sync),
+  and the `run` command stops before `sync`.
+- A full D1 sync is refused when D1 already holds a snapshot unless `sync --full` is passed
+  explicitly (`run` never passes it); without the local sync marker the operator runs
+  `sync --bootstrap-state --run <D1 run id>`.
+- Permits are never deleted on reload: a permit that leaves all three San José feeds (finaled
+  permits drop out) keeps its last observed state and `last_seen_run`, so its roof-age evidence
+  survives. `days_open` is not part of the permit row hash used for D1 diffs.
+- `publish` skips a run whose sources were all unchanged when an earlier run is published
+  (`--force` overrides), because each publish stores about 84 MB on the pinning service.
+- The publish step stores the full manifest in the run record, so the Worker serves
+  `/api/manifest` from D1 and fetches from the gateway only as a fallback.
+- Stalled = expired without a final inspection and without a completed approval: a permit whose
+  approvals contain "Complete" anchors a roof age and is never listed as stalled or open.

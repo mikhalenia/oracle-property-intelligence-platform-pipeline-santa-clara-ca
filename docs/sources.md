@@ -8,11 +8,11 @@ they describe the sources at that moment and may change. Source keys match the `
 
 | Key | Owner | URL | Format | Refresh signal | Size observed | Constraints |
 |---|---|---|---|---|---|---|
-| `scc-parcels` | County of Santa Clara open data (Socrata dataset `ubcd-cewv`) | `https://data.sccgov.org/resource/ubcd-cewv.json` | JSON, parcel polygons (`the_geom`) with APN, situs address parts, jurisdiction, tax rate area | Dataset-level `:updated_at` (read with `$select=max(:updated_at)`), not row-level | 494,841 parcels loaded in run 2; `:updated_at` was 2026-08-26T16:22:37Z (observed) | Paged with `$order=objectid&$limit=10000&$offset=n` (pipeline page size 10,000). No owner, no year built. Change detection is dataset-level only: a changed timestamp means a full re-read. Coordinates are the bounding-box center of the polygon, not a rooftop point. The design spec records 504,717 polygons at planning time; run 2 loaded 494,841 (rows without a normalizable APN are skipped and counted; the 9,876 difference was not itemized). Run 1 hit a parcels page read failure and finished `partial` (observed). |
+| `scc-parcels` | County of Santa Clara open data (Socrata dataset `ubcd-cewv`) | `https://data.sccgov.org/resource/ubcd-cewv.json` | JSON, parcel polygons (`the_geom`) with APN, situs address parts, jurisdiction, tax rate area | Dataset-level `:updated_at` (read with `$select=max(:updated_at)`), not row-level | 494,841 parcels loaded in run 2; `:updated_at` was 2026-08-26T16:22:37Z (observed) | Paged with `$order=objectid&$limit=10000&$offset=n` (pipeline page size 10,000). No owner, no year built. Change detection is dataset-level only: a changed timestamp means a full re-read. Coordinates are the bounding-box center of the polygon, not a rooftop point. The design spec records 504,717 polygons at planning time; run 2 loaded 494,841 (rows without a normalizable APN are skipped; runs before run 3 did not record how many, so the 9,876 difference was not itemized; later runs record the count as `skippedNoApn` in the `scc-parcels` source stats). Run 1 hit a parcels page read failure and finished `partial` (observed). |
 | `sj-permits-active` | City of San José open data (CKAN, `data.sanjoseca.gov`) | package `active-building-permits`, resource `buildingpermitsactive.csv` | CSV | CKAN resource `last_modified` (daily, about 16:00 PT) | 17,291 rows (observed) | Covers the City of San José only. |
 | `sj-permits-under_inspection` | same | package `building-permits-under-inspection`, `buildingpermitsunderinspection.csv` | CSV | same | 10,609 rows (observed) | same |
 | `sj-permits-expired` | same | package `expired-building-permits`, `buildingpermitsexpired.csv` | CSV | same | 75,802 rows (observed) | same |
-| `sj-permits-last_30_days` | same | package `last-30-days-building-permits`, `buildingpermits30.csv` | CSV | same | not recorded in run 2 | Overlaps the other three; defined in `libs/sources/src/ckan-permits.ts` for windowed refreshes. |
+| `sj-permits-last_30_days` | same | package `last-30-days-building-permits`, `buildingpermits30.csv` | CSV | same | not recorded in run 2 | Overlaps the other three; downloaded for completeness, not used for windowing (the other three files are full daily dumps). Defined in `libs/sources/src/ckan-permits.ts`. |
 
 Exact download URLs are in `CKAN_PERMIT_RESOURCES` in `libs/sources/src/ckan-permits.ts`;
 `last_modified` comes from `https://data.sanjoseca.gov/api/3/action/package_show?id=<package>`.
@@ -21,6 +21,11 @@ Run 2 totals (`docs/runs/2026-10-07T17-10-54Z.json`): 494,841 properties, 93,093
 matched to a parcel by APN), 7,751 roofing permits, 8,920 contractors, 77,359 owner observations,
 7,151 roof-age rows. Roofing permits by state: expired_unfinaled 6,707, open 1,017, finaled 27.
 Roof age of at least 15 years: 2,021 parcels, 962 of them within 5 miles of downtown San José.
+
+The three permit CSVs are downloaded and parsed on every run; only the upsert is skipped when
+every file's `last_modified` is unchanged. A permit that disappears from all three feeds (finaled
+permits drop out of them) is not deleted: it keeps its last observed state, and `last_seen_run`
+in `permits.parquet` tells when it was last seen.
 
 Every stored record carries `source_key`, `source_url`, `source_version`, `fetched_at`,
 `page_sha256` and `record_hash`. Raw pages and files are kept under `data/raw/<run_id>/`
