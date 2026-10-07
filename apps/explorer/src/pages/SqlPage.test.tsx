@@ -6,6 +6,10 @@ import * as api from "../api";
 import * as duck from "../duckdb";
 
 vi.mock("../api");
+vi.mock("../gateways", async (orig) => ({
+  ...(await orig<typeof import("../gateways")>()),
+  pickGateway: vi.fn(async () => "ipfs.raribleuserdata.com"),
+}));
 vi.mock("../duckdb", async (orig) => ({
   ...(await orig<typeof duck>()),
   runSql: vi.fn(),
@@ -40,9 +44,10 @@ describe("SqlPage", () => {
     await userEvent.click(screen.getByRole("button", { name: /run/i }));
     await waitFor(() =>
       expect(duck.runSql).toHaveBeenCalledWith(
-        "SELECT * FROM 'https://ipfs.filebase.io/ipfs/bafyroot/leads.parquet'",
+        "SELECT * FROM 'https://ipfs.raribleuserdata.com/ipfs/bafyroot/leads.parquet'",
       ),
     );
     expect(await screen.findByText(/1 row/)).toBeInTheDocument();
+    expect(screen.getByText(/Gateway in use: ipfs.raribleuserdata.com/)).toBeInTheDocument();
   });
 });

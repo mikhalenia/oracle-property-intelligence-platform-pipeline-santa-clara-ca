@@ -106,3 +106,51 @@ async function get<T>(path: string): Promise<T> {
 export const getHealth = () => get<Health>("/api/health");
 export const getRuns = () => get<RunRecord[]>("/api/runs");
 export const getManifest = () => get<ManifestResponse>("/api/manifest");
+
+/** One row of `/api/leads/aged-roofs` or `/api/leads/open-permits` (see the Worker's `toLead`). */
+export interface Lead {
+  apn: string | null;
+  situsAddress: string | null;
+  situsCity: string | null;
+  lat: number | null;
+  lon: number | null;
+  roofDate: string | null;
+  roofAgeYears: number | null;
+  roofAgeAnchor: string | null;
+  roofAgeConfidence: string | null;
+  roofAgePermit: string | null;
+  permitNumber: string | null;
+  permitState: string | null;
+  approvalsComplete: boolean;
+  daysOpen: number | null;
+  issueDate: string | null;
+  contractorCompany: string | null;
+  cslbLicenseNumber: string | null;
+  ownerName: string | null;
+  distanceMiles: number;
+  provenance: {
+    propertySourceUrl: string | null;
+    permitSourceUrl: string | null;
+    permitSourceVersion: string | null;
+    fetchedAt: string | null;
+  };
+}
+
+export interface LeadsResponse {
+  snapshot: { runId: string | null; manifestCid: string | null; syncedAt: string | null };
+  items: Lead[];
+}
+
+export interface LeadsQuery {
+  lat: number;
+  lon: number;
+  radiusMiles: number;
+}
+
+const qs = (p: object) =>
+  new URLSearchParams(Object.entries(p).map(([k, v]) => [k, String(v)])).toString();
+
+export const getAgedRoofs = (p: LeadsQuery & { minRoofAgeYears: number }) =>
+  get<LeadsResponse>(`/api/leads/aged-roofs?${qs(p)}`);
+export const getOpenPermits = (p: LeadsQuery & { state: "any" | "open" | "expired_unfinaled" }) =>
+  get<LeadsResponse>(`/api/leads/open-permits?${qs(p)}`);

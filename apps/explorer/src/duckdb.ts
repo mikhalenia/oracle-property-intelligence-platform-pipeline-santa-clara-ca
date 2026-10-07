@@ -1,6 +1,6 @@
 import type { AsyncDuckDB } from "@duckdb/duckdb-wasm";
 import { DataType } from "apache-arrow";
-import { VENDOR_GATEWAY, gatewayUrl } from "./gateways";
+import { gatewayUrl } from "./gateways";
 
 let dbPromise: Promise<AsyncDuckDB> | null = null;
 
@@ -32,10 +32,10 @@ export interface SqlExample {
   sql: string;
 }
 
-export const baseFor = (rootCid: string) => gatewayUrl(rootCid, VENDOR_GATEWAY);
+export const baseFor = (rootCid: string, gateway: string) => gatewayUrl(rootCid, gateway);
 
-export async function loadExamples(rootCid: string): Promise<SqlExample[]> {
-  const res = await fetch(gatewayUrl(rootCid, VENDOR_GATEWAY, "sql-examples.json"));
+export async function loadExamples(rootCid: string, gateway: string): Promise<SqlExample[]> {
+  const res = await fetch(gatewayUrl(rootCid, gateway, "sql-examples.json"));
   if (!res.ok) throw new Error(`sql-examples.json responded ${res.status}`);
   return (await res.json()) as SqlExample[];
 }

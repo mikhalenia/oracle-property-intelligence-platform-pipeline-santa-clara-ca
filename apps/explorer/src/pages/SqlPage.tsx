@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 import { useEffect, useState } from "react";
 import { getManifest } from "../api";
+import { SQL_GATEWAYS, pickGateway } from "../gateways";
 import {
   baseFor,
   loadExamples,
@@ -29,6 +30,7 @@ const show = (v: unknown) =>
 
 export function SqlPage() {
   const [base, setBase] = useState<string | null>(null);
+  const [gateway, setGateway] = useState<string | null>(null);
   const [examples, setExamples] = useState<SqlExample[]>([]);
   const [selected, setSelected] = useState("");
   const [sql, setSql] = useState("");
@@ -44,9 +46,11 @@ export function SqlPage() {
       const root =
         m.manifest?.artifacts.find((a) => a.codec === "directory") ?? m.manifest?.artifacts[0];
       if (!root) throw new Error(m.error ?? "no manifest published yet");
+      const gw = await pickGateway(root.cid, "leads.parquet");
       if (!live) return;
-      setBase(baseFor(root.cid));
-      setExamples(await loadExamples(root.cid));
+      setGateway(gw);
+      setBase(baseFor(root.cid, gw));
+      setExamples(await loadExamples(root.cid, gw));
     })().catch(
       (e: unknown) =>
         live && setNotice(`Examples unavailable: ${e instanceof Error ? e.message : String(e)}`),
@@ -85,6 +89,11 @@ export function SqlPage() {
         DuckDB-WASM in your browser reading {base ?? "<gateway>/ipfs/<rootCid>"}/leads.parquet — no
         server database
       </Alert>
+      <Typography variant="body2">
+        {gateway
+          ? `Gateway in use: ${gateway} (first of ${SQL_GATEWAYS.join(", ")} answering a range probe; the manifest page shows verification on independent gateways)`
+          : "Choosing a gateway…"}
+      </Typography>
       {notice && <Alert severity="warning">{notice}</Alert>}
       <TextField
         select

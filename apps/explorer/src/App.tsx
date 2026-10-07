@@ -1,5 +1,6 @@
 import { AppBar, Box, Button, Container, CssBaseline, Toolbar, Typography } from "@mui/material";
 import { Link, Route, Routes } from "react-router-dom";
+import { LeadsPage } from "./pages/LeadsPage";
 import { ManifestPage } from "./pages/ManifestPage";
 import { RunsPage } from "./pages/RunsPage";
 import { SourcesPage } from "./pages/SourcesPage";
@@ -7,6 +8,7 @@ import { SqlPage } from "./pages/SqlPage";
 
 const NAV = [
   ["Runs", "/"],
+  ["Leads", "/leads"],
   ["Sources", "/sources"],
   ["Manifest", "/manifest"],
   ["SQL", "/sql"],
@@ -32,6 +34,7 @@ export default function App() {
         <Box sx={{ py: 3 }}>
           <Routes>
             <Route path="/" element={<RunsPage />} />
+            <Route path="/leads" element={<LeadsPage />} />
             <Route path="/sources" element={<SourcesPage />} />
             <Route path="/manifest" element={<ManifestPage />} />
             <Route path="/sql" element={<SqlPage />} />
