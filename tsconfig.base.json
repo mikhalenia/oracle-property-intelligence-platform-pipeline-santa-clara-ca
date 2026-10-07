@@ -17,6 +17,9 @@
       "@scc/domain": [
         "libs/domain/src/index.ts"
       ],
+      "@scc/domain/geo": [
+        "libs/domain/src/geo.ts"
+      ],
       "@scc/sources": [
         "libs/sources/src/index.ts"
       ]

@@ -1,0 +1,5 @@
+{
+  "name": "@scc/mcp-server",
+  "private": true,
+  "type": "module"
+}

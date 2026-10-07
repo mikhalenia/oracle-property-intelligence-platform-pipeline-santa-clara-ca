@@ -1,0 +1,9 @@
+// Test-only config: the workerd bundled with @cloudflare/vitest-pool-workers 0.22
+// supports compatibility dates up to 2026-08-22; production uses wrangler.jsonc.
+{
+  "name": "scc-pipeline-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [{ "binding": "DB", "database_name": "scc-snapshot", "database_id": "test" }],
+}

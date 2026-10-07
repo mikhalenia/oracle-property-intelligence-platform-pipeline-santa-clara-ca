@@ -1,0 +1,26 @@
+{
+  "name": "mcp-server",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/mcp-server/src",
+  "projectType": "application",
+  "tags": [],
+  "targets": {
+    "typecheck": {
+      "command": "tsc -p tsconfig.json --noEmit",
+      "options": { "cwd": "apps/mcp-server" }
+    },
+    "test": {
+      "command": "vitest run",
+      "options": { "cwd": "apps/mcp-server" },
+      "cache": true
+    },
+    "deploy": {
+      "command": "wrangler deploy",
+      "options": { "cwd": "apps/mcp-server" }
+    },
+    "migrate": {
+      "command": "wrangler d1 migrations apply scc-snapshot --remote",
+      "options": { "cwd": "apps/mcp-server" }
+    }
+  }
+}

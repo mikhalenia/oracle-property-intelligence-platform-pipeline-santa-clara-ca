@@ -1,0 +1,87 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import * as q from "./queries";
+import {
+  AgedRoofsQuery,
+  ApnParam,
+  ContractorParam,
+  OpenPermitsQuery,
+  RadiusQuery,
+} from "./schemas";
+
+const text = (result: unknown) => ({
+  content: [{ type: "text" as const, text: JSON.stringify(result) }],
+});
+
+const PROVENANCE =
+  "Every result carries the snapshot { runId, manifestCid, syncedAt } (manifestCid is the IPFS CID of the published snapshot manifest) and each lead includes provenance (property and permit source URL, source version, fetchedAt).";
+const SPATIAL =
+  "Center is lat/lon in Santa Clara County; radiusMiles is in miles (default 5, max 25); limit defaults to 200 (max 500); distanceMiles is in miles.";
+const STATES =
+  "Permit states: open (issued, still active), expired_unfinaled (expired without a final inspection, i.e. stalled), finaled (completed with a final inspection).";
+
+export function registerTools(server: McpServer, db: D1Database): void {
+  server.registerTool(
+    "search_properties_in_radius",
+    {
+      description: `List parcels within a radius, nearest first, each with its latest roofing permit, estimated roof age (years), contractor and latest observed owner when known. ${SPATIAL} ${STATES} ${PROVENANCE}`,
+      inputSchema: RadiusQuery.shape,
+    },
+    async (args) => text({ snapshot: await q.snapshot(db), items: await q.radius(db, args) }),
+  );
+
+  server.registerTool(
+    "find_aged_roofs",
+    {
+      description: `Find re-roofing leads: parcels whose estimated roof age in years is at least minRoofAgeYears (default 15), oldest roofs first, then nearest. Roof age is derived from roofing permits only: the final inspection date (confidence high) or, failing that, the issue date of a permit whose approvals are Complete (confidence medium); parcels with no such permit have no roof age and are not returned. ${SPATIAL} ${PROVENANCE}`,
+      inputSchema: AgedRoofsQuery.shape,
+    },
+    async (args) => text({ snapshot: await q.snapshot(db), items: await q.agedRoofs(db, args) }),
+  );
+
+  server.registerTool(
+    "find_open_roofing_permits",
+    {
+      description: `Find permits that never received a final inspection, longest-open first. ${STATES} state filter: open, expired_unfinaled, or any (default; open + expired_unfinaled, never finaled). minOpenYears is in years (default 0); roofingOnly defaults to true. Label expired_unfinaled rows as "expired without a final inspection (stalled)". ${SPATIAL} ${PROVENANCE}`,
+      inputSchema: OpenPermitsQuery.shape,
+    },
+    async (args) => text({ snapshot: await q.snapshot(db), items: await q.openPermits(db, args) }),
+  );
+
+  server.registerTool(
+    "get_property",
+    {
+      description: `Full detail for one parcel by APN: property, all permits (with permitState: ${STATES}), roof age (years), observed owners and contractors with CSLB license status. ${PROVENANCE}`,
+      inputSchema: ApnParam.shape,
+    },
+    async ({ apn }) => text((await q.property(db, apn)) ?? { error: "not found", apn }),
+  );
+
+  server.registerTool(
+    "get_contractor",
+    {
+      description: `One contractor by id with CSLB license number/status, permit counts and all of its permits. ${STATES} ${PROVENANCE}`,
+      inputSchema: ContractorParam.shape,
+    },
+    async ({ id }) => text((await q.contractor(db, id)) ?? { error: "not found", id }),
+  );
+
+  server.registerTool(
+    "list_runs",
+    {
+      description:
+        "List pipeline run records, newest first: per-source fetch counts and source versions, totals, known limitations, and the manifest CID of each published snapshot.",
+      inputSchema: {},
+    },
+    async () => text(await q.runs(db)),
+  );
+
+  server.registerTool(
+    "get_manifest",
+    {
+      description:
+        "The manifest of the latest published snapshot: per-table file CIDs, row counts and source versions, so any answer can be verified against IPFS. Falls back to { manifestCid } when the run record has no manifest.",
+      inputSchema: {},
+    },
+    async () => text(await q.manifest(db)),
+  );
+}
