@@ -23,12 +23,22 @@ app.get("/api/properties/radius", async (c) => {
 
 app.get("/api/leads/aged-roofs", async (c) => {
   const p = AgedRoofsQuery.parse(c.req.query());
-  return c.json({ snapshot: await q.snapshot(c.env.DB), items: await q.agedRoofs(c.env.DB, p) });
+  const items = await q.agedRoofs(c.env.DB, p);
+  return c.json({
+    snapshot: await q.snapshot(c.env.DB),
+    items,
+    truncated: q.isTruncated(items, p.limit),
+  });
 });
 
 app.get("/api/leads/open-permits", async (c) => {
   const p = OpenPermitsQuery.parse(c.req.query());
-  return c.json({ snapshot: await q.snapshot(c.env.DB), items: await q.openPermits(c.env.DB, p) });
+  const items = await q.openPermits(c.env.DB, p);
+  return c.json({
+    snapshot: await q.snapshot(c.env.DB),
+    items,
+    truncated: q.isTruncated(items, p.limit),
+  });
 });
 
 app.get("/api/properties/:apn", async (c) => {

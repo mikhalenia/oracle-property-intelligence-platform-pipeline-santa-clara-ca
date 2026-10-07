@@ -14,6 +14,9 @@ export const DAYS_CENTER = { lat: 37.9, lon: -121.5 };
 /** Stalled-rule fixtures: an expired permit with a Complete approval and one without. */
 export const STALLED_CENTER = { lat: 37.1, lon: -121.6 };
 
+/** An open permit with complete approvals (still open) beside an expired one (finished, not stalled). */
+export const OPEN_COMPLETE_CENTER = { lat: 36.9, lon: -121.3 };
+
 export async function seed(db: D1Database): Promise<void> {
   const prop = db.prepare(
     `INSERT INTO properties (apn, situs_address, situs_city, situs_zip, jurisdiction, lat, lon, source_url, source_version, fetched_at)
@@ -78,6 +81,23 @@ export async function seed(db: D1Database): Promise<void> {
            VALUES (?1, ?2, 'Expired', 'expired_unfinaled', 1, ?3, ?4, '${PERMITS_URL}', 'v-permits', '2026-10-07T16:00:00Z')`,
         )
         .bind(num, apn, approvals, issue),
+    ]),
+    ...[
+      ["J-010", "J-PERMIT-OPEN-COMPLETE", "open"],
+      ["K-011", "K-PERMIT-EXPIRED-COMPLETE", "expired_unfinaled"],
+    ].flatMap(([apn, num, state], i) => [
+      prop.bind(
+        apn,
+        `${i + 1} COMPLETE ST`,
+        OPEN_COMPLETE_CENTER.lat + i * 0.001,
+        OPEN_COMPLETE_CENTER.lon,
+      ),
+      db
+        .prepare(
+          `INSERT INTO permits (permit_number, apn, status, permit_state, is_roofing, approvals, issue_date, source_url, source_version, fetched_at)
+           VALUES (?1, ?2, 'x', ?3, 1, 'B-Complete', '2024-01-01', '${PERMITS_URL}', 'v-permits', '2026-10-07T16:00:00Z')`,
+        )
+        .bind(num, apn, state),
     ]),
     db.prepare(
       `INSERT INTO roof_age (apn, roof_date, roof_age_years, anchor, confidence, permit_number, source_url, source_version, fetched_at)

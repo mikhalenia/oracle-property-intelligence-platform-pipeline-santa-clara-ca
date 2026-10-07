@@ -19,7 +19,7 @@ const SPATIAL =
 const DAYS_OPEN =
   "daysOpen is computed as of today for open and stalled permits, and issue→final for finaled permits.";
 const STATES =
-  "Permit states (permitState machine value, with permitStateLabel for display): open = \"Open\" (issued, still active), expired_unfinaled = \"Stalled (expired without a final inspection)\", finaled = \"Completed\" (completed with a final inspection). Show permitStateLabel to people, never the raw value. Roof age basis: roofAgeAnchor final_date = \"final inspection date\", approval_complete_issue_date = \"approval completed (issue date)\" (roofAgeBasisLabel); roofAgeConfidence high = \"high confidence\", medium = \"estimated\" (roofAgeConfidenceLabel). approvalsComplete is true when the permit's approvals include Complete (the work was approved as complete). Stalled = expired without a final inspection and without a completed approval.";
+  'Permit states (permitState machine value, with permitStateLabel for display): open = "Open" (issued, still active), expired_unfinaled = "Stalled (expired without a final inspection)", finaled = "Completed" (completed with a final inspection). Show permitStateLabel to people, never the raw value. Roof age basis: roofAgeAnchor final_date = "final inspection date", approval_complete_issue_date = "approval completed (issue date)" (roofAgeBasisLabel); roofAgeConfidence high = "high confidence", medium = "estimated" (roofAgeConfidenceLabel). approvalsComplete is true when the permit\'s approvals include Complete (the work was approved as complete). Stalled = expired without a final inspection and without a completed approval.';
 
 type ToolEnv = { DB: D1Database; MANIFEST_GATEWAY: string };
 
@@ -40,16 +40,30 @@ export function registerTools(server: McpServer, env: ToolEnv): void {
       description: `Find re-roofing leads: parcels whose estimated roof age in years is at least minRoofAgeYears (default 15), oldest roofs first, then nearest. Roof age is derived from roofing permits only: the final inspection date (roofAgeConfidence high, labelled "high confidence") or, failing that, the issue date of a permit whose approvals are Complete (roofAgeConfidence medium, labelled "estimated"); parcels with no such permit have no roof age and are not returned. ${DAYS_OPEN} ${SPATIAL} ${PROVENANCE}`,
       inputSchema: AgedRoofsQuery.shape,
     },
-    async (args) => text({ snapshot: await q.snapshot(db), items: await q.agedRoofs(db, args) }),
+    async (args) => {
+      const items = await q.agedRoofs(db, args);
+      return text({
+        snapshot: await q.snapshot(db),
+        items,
+        truncated: q.isTruncated(items, args.limit),
+      });
+    },
   );
 
   server.registerTool(
     "find_open_roofing_permits",
     {
-      description: `Find permits that never received a final inspection and whose approvals are not Complete, longest-open first. ${STATES} state filter: open, expired_unfinaled, or any (default; open + expired_unfinaled, never finaled). Permits with a Complete approval are never returned (finished work awaiting paperwork; they anchor a roof age instead). minOpenYears is in years (default 0); ${DAYS_OPEN} roofingOnly defaults to true. expired_unfinaled rows carry permitStateLabel "Stalled (expired without a final inspection)" (no final inspection and no completed approval). ${SPATIAL} ${PROVENANCE}`,
+      description: `Find permits that never received a final inspection, longest-open first. The response carries truncated: true when exactly limit rows came back (more may exist; say "at least N"). ${STATES} state filter: open, expired_unfinaled, or any (default; open + expired_unfinaled, never finaled). An open permit whose approvals are Complete still counts as open; an expired permit with a Complete approval is finished work, not stalled, and is not returned (it anchors a roof age instead). minOpenYears is in years (default 0); ${DAYS_OPEN} roofingOnly defaults to true. expired_unfinaled rows carry permitStateLabel "Stalled (expired without a final inspection)" (no final inspection and no completed approval). ${SPATIAL} ${PROVENANCE}`,
       inputSchema: OpenPermitsQuery.shape,
     },
-    async (args) => text({ snapshot: await q.snapshot(db), items: await q.openPermits(db, args) }),
+    async (args) => {
+      const items = await q.openPermits(db, args);
+      return text({
+        snapshot: await q.snapshot(db),
+        items,
+        truncated: q.isTruncated(items, args.limit),
+      });
+    },
   );
 
   server.registerTool(

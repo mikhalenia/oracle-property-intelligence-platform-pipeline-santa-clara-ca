@@ -60,6 +60,20 @@ describe("REST", () => {
     expect(body.items.map((i) => i.permitStateLabel)).toEqual(["Open"]);
   });
 
+  it("open-permits and aged-roofs report truncated when the page is full", async () => {
+    const q = `lat=${CENTER.lat}&lon=${CENTER.lon}&radiusMiles=5`;
+    for (const path of ["open-permits", "aged-roofs"]) {
+      const full = (await (await get(`/api/leads/${path}?${q}&limit=1`)).json()) as {
+        truncated: boolean;
+      };
+      const roomy = (await (await get(`/api/leads/${path}?${q}&limit=200`)).json()) as {
+        truncated: boolean;
+      };
+      expect(full.truncated).toBe(true);
+      expect(roomy.truncated).toBe(false);
+    }
+  });
+
   it("GET /api/properties/radius with invalid lat returns 400 with issues", async () => {
     const res = await get("/api/properties/radius?lat=abc&lon=-121.88");
     expect(res.status).toBe(400);

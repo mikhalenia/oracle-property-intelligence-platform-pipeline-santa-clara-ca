@@ -37,6 +37,9 @@ const daysOpenNow = (alias: string, asOfParam: string) =>
 const APPROVALS_COMPLETE = (alias: string) =>
   `(COALESCE(${alias}.approvals, '') LIKE '%Complete%')`;
 
+/** True when a page came back full, so more matching rows may exist ("at least N"). */
+export const isTruncated = (items: unknown[], limit: number) => items.length === limit;
+
 /** Bound to ?9 in every spatial query. */
 const ASOF = "?9";
 
@@ -161,7 +164,8 @@ export function openPermits(db: D1Database, p: OpenPermitsParams, asOf = today()
   const states = p.state === "any" ? ["open", "expired_unfinaled"] : [p.state];
   const where = [
     "rp.permit_state IN (?10, ?11)",
-    `NOT ${APPROVALS_COMPLETE("rp")}`,
+    // Complete approvals only rule a permit out of "stalled" (expired); an open permit stays open.
+    `(rp.permit_state = 'open' OR NOT ${APPROVALS_COMPLETE("rp")})`,
     `COALESCE(${openDays}, 0) >= ?12`,
     ...(p.roofingOnly ? ["rp.is_roofing = 1"] : []),
   ].join(" AND ");

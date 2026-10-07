@@ -8,6 +8,7 @@ import {
   MANIFEST,
   MANIFEST_URL,
   STALLED_CENTER,
+  OPEN_COMPLETE_CENTER,
   seed,
 } from "./test/seed";
 
@@ -115,6 +116,26 @@ describe("queries", () => {
       });
       const detail = await q.property(env.DB, "G-007", AS_OF);
       expect(detail!.permits[0]!.approvalsComplete).toBe(true);
+    });
+  });
+
+  describe("approval-complete permits", () => {
+    const cBase = {
+      ...OPEN_COMPLETE_CENTER,
+      radiusMiles: 5,
+      limit: 200,
+      minOpenYears: 0,
+      roofingOnly: true,
+    };
+
+    it("an open permit with complete approvals still counts as open; an expired one is excluded", async () => {
+      for (const state of ["any", "open"] as const) {
+        const items = await q.openPermits(env.DB, { ...cBase, state }, AS_OF);
+        expect(items.map((i) => i.permitNumber)).toEqual(["J-PERMIT-OPEN-COMPLETE"]);
+        expect(items[0]!.approvalsComplete).toBe(true);
+      }
+      const expired = await q.openPermits(env.DB, { ...cBase, state: "expired_unfinaled" }, AS_OF);
+      expect(expired).toEqual([]);
     });
   });
 
