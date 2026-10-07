@@ -74,7 +74,26 @@ describe("REST", () => {
     expect(((await (await get("/api/runs")).json()) as unknown[]).length).toBe(3);
   });
 
-  it("GET /api/manifest fetches the snapshot manifest from the gateway", async () => {
+  it("GET /api/manifest serves the manifest stored in the run record without calling fetch", async () => {
+    const stored = { schema: "scc-manifest/1", runId: "run-2", artifacts: [] };
+    await env.DB.prepare("UPDATE runs SET record = ?1 WHERE run_id = 'run-2'")
+      .bind(JSON.stringify({ runId: "run-2", manifestCid: "bafy-manifest", manifest: stored }))
+      .run();
+    const fetchMock = vi.fn(async () => new Response("rate limited", { status: 429 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const res = await get("/api/manifest");
+      expect(await res.json()).toMatchObject({ manifestUrl: MANIFEST_URL, manifest: stored });
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+      await env.DB.prepare("UPDATE runs SET record = ?1 WHERE run_id = 'run-2'")
+        .bind(JSON.stringify({ runId: "run-2", manifestCid: "bafy-manifest" }))
+        .run();
+    }
+  });
+
+  it("GET /api/manifest falls back to the gateway when the run record lacks the manifest", async () => {
     const fetchMock = vi.fn(async () => Response.json(MANIFEST));
     vi.stubGlobal("fetch", fetchMock);
     try {

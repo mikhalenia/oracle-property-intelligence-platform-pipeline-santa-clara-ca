@@ -29,6 +29,14 @@ const MAX_CANDIDATES = 2000;
 const daysOpenNow = (alias: string, asOfParam: string) =>
   `CASE WHEN ${alias}.permit_state = 'finaled' THEN ${alias}.days_open ELSE CAST(julianday(${asOfParam}) - julianday(${alias}.issue_date) AS INTEGER) END`;
 
+/**
+ * A permit whose approvals include "Complete" is finished work (it anchors a medium-confidence roof
+ * age), so it is never stalled: stalled = expired without a final inspection and without a
+ * completed approval. Same test as the pipeline's roof-age rule (no source value is "Incomplete").
+ */
+const APPROVALS_COMPLETE = (alias: string) =>
+  `(COALESCE(${alias}.approvals, '') LIKE '%Complete%')`;
+
 /** Bound to ?9 in every spatial query. */
 const ASOF = "?9";
 
@@ -45,7 +53,7 @@ const LATEST_OWNER = `(SELECT y.permit_number FROM owners y WHERE y.apn = pr.apn
 const LEAD_COLUMNS = `pr.apn, pr.situs_address, pr.situs_city, pr.situs_zip, pr.jurisdiction, pr.lat, pr.lon,
   ra.roof_date, ra.roof_age_years, ra.anchor AS roof_age_anchor, ra.confidence AS roof_age_confidence,
   ra.permit_number AS roof_age_permit,
-  rp.permit_number, rp.permit_state, ${daysOpenNow("rp", ASOF)} AS days_open_now, rp.issue_date, rp.final_date, rp.work_description,
+  rp.permit_number, rp.permit_state, ${APPROVALS_COMPLETE("rp")} AS approvals_complete, ${daysOpenNow("rp", ASOF)} AS days_open_now, rp.issue_date, rp.final_date, rp.work_description,
   rp.contractor_company, rp.contractor_id, c.cslb_license_number, c.cslb_status,
   o.owner_name, o.observed_on AS owner_observed_on,
   pr.source_url AS property_source_url, pr.source_version AS property_source_version,
@@ -153,6 +161,7 @@ export function openPermits(db: D1Database, p: OpenPermitsParams, asOf = today()
   const states = p.state === "any" ? ["open", "expired_unfinaled"] : [p.state];
   const where = [
     "rp.permit_state IN (?10, ?11)",
+    `NOT ${APPROVALS_COMPLETE("rp")}`,
     `COALESCE(${openDays}, 0) >= ?12`,
     ...(p.roofingOnly ? ["rp.is_roofing = 1"] : []),
   ].join(" AND ");
@@ -178,7 +187,7 @@ export async function property(db: D1Database, apn: string, asOf = today()) {
     snapshot(db),
     db
       .prepare(
-        `SELECT p.*, ${daysOpenNow("p", "?2")} AS days_open_now FROM permits p WHERE p.apn = ?1 ORDER BY p.issue_date DESC, p.permit_number`,
+        `SELECT p.*, ${APPROVALS_COMPLETE("p")} AS approvals_complete, ${daysOpenNow("p", "?2")} AS days_open_now FROM permits p WHERE p.apn = ?1 ORDER BY p.issue_date DESC, p.permit_number`,
       )
       .bind(apn, asOf)
       .all<PermitRow>(),
@@ -221,7 +230,7 @@ export async function contractor(db: D1Database, id: string, asOf = today()) {
     snapshot(db),
     db
       .prepare(
-        `SELECT p.*, ${daysOpenNow("p", "?2")} AS days_open_now FROM permits p WHERE p.contractor_id = ?1 ORDER BY p.issue_date DESC, p.permit_number`,
+        `SELECT p.*, ${APPROVALS_COMPLETE("p")} AS approvals_complete, ${daysOpenNow("p", "?2")} AS days_open_now FROM permits p WHERE p.contractor_id = ?1 ORDER BY p.issue_date DESC, p.permit_number`,
       )
       .bind(id, asOf)
       .all<PermitRow>(),

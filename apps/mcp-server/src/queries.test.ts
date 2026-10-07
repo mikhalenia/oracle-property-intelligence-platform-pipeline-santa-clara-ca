@@ -1,7 +1,15 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import * as q from "./queries";
-import { AS_OF, CENTER, DAYS_CENTER, MANIFEST, MANIFEST_URL, seed } from "./test/seed";
+import {
+  AS_OF,
+  CENTER,
+  DAYS_CENTER,
+  MANIFEST,
+  MANIFEST_URL,
+  STALLED_CENTER,
+  seed,
+} from "./test/seed";
 
 const base = { ...CENTER, radiusMiles: 5, limit: 200 };
 
@@ -82,6 +90,32 @@ describe("queries", () => {
       AS_OF,
     );
     expect(items).toEqual([]);
+  });
+
+  describe("stalled = expired without a final inspection and without a completed approval", () => {
+    const sBase = { ...STALLED_CENTER, radiusMiles: 5, limit: 200 };
+
+    it("an expired permit with a Complete approval is not stalled but still yields roof age", async () => {
+      for (const state of ["any", "expired_unfinaled"] as const) {
+        const items = await q.openPermits(
+          env.DB,
+          { ...sBase, state, minOpenYears: 0, roofingOnly: true },
+          AS_OF,
+        );
+        expect(items.map((i) => i.permitNumber)).toEqual(["H-PERMIT-EXPIRED-STALLED"]);
+        expect(items[0]!.approvalsComplete).toBe(false);
+      }
+      const aged = await q.agedRoofs(env.DB, { ...sBase, minRoofAgeYears: 15 }, AS_OF);
+      expect(aged.map((i) => i.apn)).toEqual(["G-007"]);
+      expect(aged[0]).toMatchObject({
+        roofAgeYears: 22,
+        roofAgeConfidence: "medium",
+        permitNumber: "G-PERMIT-EXPIRED-COMPLETE",
+        approvalsComplete: true,
+      });
+      const detail = await q.property(env.DB, "G-007", AS_OF);
+      expect(detail!.permits[0]!.approvalsComplete).toBe(true);
+    });
   });
 
   describe("days open at query time", () => {
@@ -179,6 +213,28 @@ describe("queries", () => {
     const runs = (await q.runs(env.DB)) as { runId: string; manifestCid: string | null }[];
     expect(runs.map((r) => r.runId)).toEqual(["run-3", "run-2", "run-1"]);
     expect(runs[1]!.manifestCid).toBe("bafy-manifest");
+  });
+
+  it("manifest serves the manifest stored in the synced run record without calling the gateway", async () => {
+    const stored = { schema: "scc-manifest/1", runId: "run-2", artifacts: [] };
+    await env.DB.prepare("UPDATE runs SET record = ?1 WHERE run_id = 'run-2'")
+      .bind(JSON.stringify({ runId: "run-2", manifestCid: "bafy-manifest", manifest: stored }))
+      .run();
+    try {
+      const r = await q.manifest(env.DB, "https://ipfs.filebase.io", async () => {
+        throw new Error("gateway must not be called");
+      });
+      expect(r).toEqual({
+        runId: "run-2",
+        manifestCid: "bafy-manifest",
+        manifestUrl: MANIFEST_URL,
+        manifest: stored,
+      });
+    } finally {
+      await env.DB.prepare("UPDATE runs SET record = ?1 WHERE run_id = 'run-2'")
+        .bind(JSON.stringify({ runId: "run-2", manifestCid: "bafy-manifest" }))
+        .run();
+    }
   });
 
   it("manifest resolves the snapshot run and fetches the manifest from the gateway", async () => {

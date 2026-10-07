@@ -49,7 +49,7 @@ export const PermitStateFilter = z.enum(["open", "expired_unfinaled", "any"]);
 export const OpenPermitsQuery = z.object({
   ...center,
   state: PermitStateFilter.default("any").describe(
-    "open = issued and still active; expired_unfinaled = expired without a final inspection (stalled); any = both (finaled permits are never returned). Default any",
+    "open = issued and still active; expired_unfinaled = expired without a final inspection (stalled); any = both. Finaled permits and permits whose approvals are Complete are never returned. Default any",
   ),
   minOpenYears: z.coerce
     .number()

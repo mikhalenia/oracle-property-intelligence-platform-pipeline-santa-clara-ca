@@ -1,6 +1,6 @@
 /** Run records and the published manifest of the snapshot loaded into D1. */
 
-type RunRecord = { runId?: string; manifestCid?: string | null };
+type RunRecord = { runId?: string; manifestCid?: string | null; manifest?: unknown };
 export type Fetcher = (url: string) => Promise<Response>;
 
 export async function runs(db: D1Database): Promise<unknown[]> {
@@ -11,8 +11,9 @@ export async function runs(db: D1Database): Promise<unknown[]> {
 }
 
 /**
- * The snapshot's run (`snapshot.run_id`, else the newest run) with its manifest fetched from the
- * IPFS gateway. Gateway failures are reported in `error` with `manifest: null`, never thrown.
+ * The snapshot's run (`snapshot.run_id`, else the newest run) with its manifest: the copy stored in
+ * the synced run record (written at publish time), else fetched from the IPFS gateway as a fallback.
+ * Gateway failures are reported in `error` with `manifest: null`, never thrown.
  */
 export async function manifest(db: D1Database, gateway: string, fetcher: Fetcher) {
   const row = await db
@@ -28,6 +29,7 @@ export async function manifest(db: D1Database, gateway: string, fetcher: Fetcher
   if (!manifestCid)
     return { runId, manifestCid, manifestUrl: null, manifest: null, error: "run is not published" };
   const manifestUrl = `${gateway.replace(/\/+$/, "")}/ipfs/${manifestCid}`;
+  if (record.manifest) return { runId, manifestCid, manifestUrl, manifest: record.manifest };
   try {
     const res = await fetcher(manifestUrl);
     if (!res.ok) throw new Error(`gateway responded ${res.status}`);

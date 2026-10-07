@@ -11,6 +11,8 @@ const PERMITS_URL = "https://data.sanjoseca.gov/permits";
 export const AS_OF = "2026-10-07";
 /** Far from CENTER so the days-open fixtures never join the other tests' results. */
 export const DAYS_CENTER = { lat: 37.9, lon: -121.5 };
+/** Stalled-rule fixtures: an expired permit with a Complete approval and one without. */
+export const STALLED_CENTER = { lat: 37.1, lon: -121.6 };
 
 export async function seed(db: D1Database): Promise<void> {
   const prop = db.prepare(
@@ -63,6 +65,24 @@ export async function seed(db: D1Database): Promise<void> {
         )
         .bind(num, apn, state, issue, fin, days),
     ]),
+    // Stalled-rule fixtures: G's expired permit has a Complete approval (roof done, not stalled),
+    // H's expired permit has none (stalled).
+    ...[
+      ["G-007", "G-PERMIT-EXPIRED-COMPLETE", "B-Complete; E-Complete", "2004-01-01"],
+      ["H-008", "H-PERMIT-EXPIRED-STALLED", "B-Issued", "2010-01-01"],
+    ].flatMap(([apn, num, approvals, issue], i) => [
+      prop.bind(apn, `${i + 1} STALLED ST`, STALLED_CENTER.lat + i * 0.001, STALLED_CENTER.lon),
+      db
+        .prepare(
+          `INSERT INTO permits (permit_number, apn, status, permit_state, is_roofing, approvals, issue_date, source_url, source_version, fetched_at)
+           VALUES (?1, ?2, 'Expired', 'expired_unfinaled', 1, ?3, ?4, '${PERMITS_URL}', 'v-permits', '2026-10-07T16:00:00Z')`,
+        )
+        .bind(num, apn, approvals, issue),
+    ]),
+    db.prepare(
+      `INSERT INTO roof_age (apn, roof_date, roof_age_years, anchor, confidence, permit_number, source_url, source_version, fetched_at)
+       VALUES ('G-007', '2004-01-01', 22, 'approval_complete_issue_date', 'medium', 'G-PERMIT-EXPIRED-COMPLETE', '${PERMITS_URL}', 'v-permits', '2026-10-07T16:00:00Z')`,
+    ),
     db.prepare(
       `INSERT INTO roof_age (apn, roof_date, roof_age_years, anchor, confidence, permit_number, source_url, source_version, fetched_at)
        VALUES ('B-002', '2006-06-15', 20, 'final_date', 'high', '2006-002-RF', '${PERMITS_URL}', 'v-permits', '2026-10-07T16:00:00Z')`,

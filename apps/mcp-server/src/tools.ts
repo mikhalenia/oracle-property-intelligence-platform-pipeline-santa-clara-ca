@@ -19,7 +19,7 @@ const SPATIAL =
 const DAYS_OPEN =
   "daysOpen is computed as of today for open and stalled permits, and issue→final for finaled permits.";
 const STATES =
-  "Permit states: open (issued, still active), expired_unfinaled (expired without a final inspection, i.e. stalled), finaled (completed with a final inspection).";
+  "Permit states: open (issued, still active), expired_unfinaled (expired without a final inspection), finaled (completed with a final inspection). approvalsComplete is true when the permit's approvals include Complete (the work was approved as complete). Stalled = expired without a final inspection and without a completed approval.";
 
 type ToolEnv = { DB: D1Database; MANIFEST_GATEWAY: string };
 
@@ -46,7 +46,7 @@ export function registerTools(server: McpServer, env: ToolEnv): void {
   server.registerTool(
     "find_open_roofing_permits",
     {
-      description: `Find permits that never received a final inspection, longest-open first. ${STATES} state filter: open, expired_unfinaled, or any (default; open + expired_unfinaled, never finaled). minOpenYears is in years (default 0); ${DAYS_OPEN} roofingOnly defaults to true. Label expired_unfinaled rows as "expired without a final inspection (stalled)". ${SPATIAL} ${PROVENANCE}`,
+      description: `Find permits that never received a final inspection and whose approvals are not Complete, longest-open first. ${STATES} state filter: open, expired_unfinaled, or any (default; open + expired_unfinaled, never finaled). Permits with a Complete approval are never returned (finished work awaiting paperwork; they anchor a roof age instead). minOpenYears is in years (default 0); ${DAYS_OPEN} roofingOnly defaults to true. Label expired_unfinaled rows as "stalled: expired without a final inspection and without a completed approval". ${SPATIAL} ${PROVENANCE}`,
       inputSchema: OpenPermitsQuery.shape,
     },
     async (args) => text({ snapshot: await q.snapshot(db), items: await q.openPermits(db, args) }),
@@ -74,7 +74,7 @@ export function registerTools(server: McpServer, env: ToolEnv): void {
     "list_runs",
     {
       description:
-        "List pipeline run records stored in the snapshot, newest first by runId. Each record has runId, timing, asOf, status, per-source fetch counts and source versions, row totals, known limitations, and manifestCid (the IPFS CID of that run's published manifest, or null if the run was never published). The manifest itself is not included; use get_manifest.",
+        "List pipeline run records stored in the snapshot, newest first by runId. Each record has runId, timing, asOf, status, per-source fetch counts and source versions, row totals, known limitations, and manifestCid (the IPFS CID of that run's published manifest, or null if the run was never published). Published runs also carry the manifest and, once checked, the gateway verification report (verification.ok, per-artifact independentOk counts). get_manifest returns the served snapshot's manifest.",
       inputSchema: {},
     },
     async () => text(await q.runs(db)),
@@ -84,7 +84,7 @@ export function registerTools(server: McpServer, env: ToolEnv): void {
     "get_manifest",
     {
       description:
-        "The manifest of the snapshot currently served (its run is the snapshot's runId, else the newest run). Returns { runId, manifestCid, manifestUrl, manifest }: manifestUrl is <IPFS gateway>/ipfs/<manifestCid> and manifest is that JSON fetched live from the gateway (schema scc-manifest/1: county, publishedAt, previousManifestCid and artifacts with each file's cid, path, size and sha256), so answers can be verified against IPFS. If the run is unpublished or the gateway fetch fails, manifest is null and error explains why.",
+        "The manifest of the snapshot currently served (its run is the snapshot's runId, else the newest run). Returns { runId, manifestCid, manifestUrl, manifest }: manifestUrl is <IPFS gateway>/ipfs/<manifestCid> and manifest is that JSON as stored in the synced run record at publish time (fetched from the gateway only when the record lacks it) (schema scc-manifest/1: county, publishedAt, previousManifestCid and artifacts with each file's cid, path, size and sha256), so answers can be verified against IPFS. If the run is unpublished or the fallback gateway fetch fails, manifest is null and error explains why.",
       inputSchema: {},
     },
     async () => text(await q.manifest(db, env.MANIFEST_GATEWAY, (url) => fetch(url))),
