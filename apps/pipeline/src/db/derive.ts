@@ -2,7 +2,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { contractorId, daysOpen, derivePermitState, deriveRoofAge } from "@scc/domain";
-import type { Db } from "./duck";
+import { sqlString, withTransaction, type Db } from "./duck";
 
 type PermitLite = {
   permit_number: string;
@@ -39,60 +39,62 @@ export async function deriveAll(
       contractor_id: p.contractor_company ? contractorId(p.contractor_company) : null,
     };
   });
-  await loadTemp(db, "permit_updates", updates);
-  await db.run(
-    "UPDATE permits SET permit_state = u.permit_state, days_open = u.days_open, contractor_id = u.contractor_id FROM permit_updates u WHERE permits.permit_number = u.permit_number",
-  );
+  await withTransaction(db, async () => {
+    await loadTemp(db, "permit_updates", updates);
+    await db.run(
+      "UPDATE permits SET permit_state = u.permit_state, days_open = u.days_open, contractor_id = u.contractor_id FROM permit_updates u WHERE permits.permit_number = u.permit_number",
+    );
 
-  // 2. roof_age — newest evidence per APN
-  const best = new Map<
-    string,
-    { row: PermitLite; roof: NonNullable<ReturnType<typeof deriveRoofAge>> }
-  >();
-  for (const p of permits) {
-    if (!p.apn) continue;
-    const roof = deriveRoofAge({
-      isRoofing: p.is_roofing,
-      approvals: p.approvals,
-      issueDate: p.issue_date,
-      finalDate: p.final_date,
-      asOf,
-    });
-    if (!roof) continue;
-    const prev = best.get(p.apn);
-    if (!prev || roof.roofDate > prev.roof.roofDate) best.set(p.apn, { row: p, roof });
-  }
-  await db.run("DELETE FROM roof_age");
-  await loadTemp(
-    db,
-    "roof_rows",
-    [...best.entries()].map(([apn, { row, roof }]) => ({
-      apn,
-      roof_date: roof.roofDate,
-      roof_age_years: roof.roofAgeYears,
-      anchor: roof.anchor,
-      confidence: roof.confidence,
-      permit_number: row.permit_number,
-      source_key: row.source_key,
-      source_url: row.source_url,
-      source_version: row.source_version,
-      fetched_at: row.fetched_at,
-    })),
-  );
-  await db.run("INSERT INTO roof_age SELECT * FROM roof_rows");
+    // 2. roof_age — newest evidence per APN
+    const best = new Map<
+      string,
+      { row: PermitLite; roof: NonNullable<ReturnType<typeof deriveRoofAge>> }
+    >();
+    for (const p of permits) {
+      if (!p.apn) continue;
+      const roof = deriveRoofAge({
+        isRoofing: p.is_roofing,
+        approvals: p.approvals,
+        issueDate: p.issue_date,
+        finalDate: p.final_date,
+        asOf,
+      });
+      if (!roof) continue;
+      const prev = best.get(p.apn);
+      if (!prev || roof.roofDate > prev.roof.roofDate) best.set(p.apn, { row: p, roof });
+    }
+    await db.run("DELETE FROM roof_age");
+    await loadTemp(
+      db,
+      "roof_rows",
+      [...best.entries()].map(([apn, { row, roof }]) => ({
+        apn,
+        roof_date: roof.roofDate,
+        roof_age_years: roof.roofAgeYears,
+        anchor: roof.anchor,
+        confidence: roof.confidence,
+        permit_number: row.permit_number,
+        source_key: row.source_key,
+        source_url: row.source_url,
+        source_version: row.source_version,
+        fetched_at: row.fetched_at,
+      })),
+    );
+    await db.run("INSERT INTO roof_age SELECT * FROM roof_rows");
 
-  // 3. contractors — aggregate by contractor_id
-  await db.run("DELETE FROM contractors");
-  await db.run(`INSERT INTO contractors
+    // 3. contractors — aggregate by contractor_id
+    await db.run("DELETE FROM contractors");
+    await db.run(`INSERT INTO contractors
     SELECT contractor_id, arg_max(contractor_company, fetched_at), arg_max(contractor_contact, fetched_at), count(*)::INT, sum(CASE WHEN is_roofing THEN 1 ELSE 0 END)::INT,
            NULL, NULL, NULL, NULL, 'sj-permits', 'https://data.sanjoseca.gov/dataset/active-building-permits', max(source_version), max(fetched_at)
     FROM permits WHERE contractor_id IS NOT NULL GROUP BY contractor_id`);
 
-  // 4. owners — one observation per (apn, permit)
-  await db.run("DELETE FROM owners");
-  await db.run(
-    "INSERT INTO owners SELECT apn, owner_name_raw, issue_date, permit_number, source_key, source_url, source_version, fetched_at FROM permits WHERE apn IS NOT NULL AND owner_name_raw IS NOT NULL",
-  );
+    // 4. owners — one observation per (apn, permit)
+    await db.run("DELETE FROM owners");
+    await db.run(
+      "INSERT INTO owners SELECT apn, owner_name_raw, issue_date, permit_number, source_key, source_url, source_version, fetched_at FROM permits WHERE apn IS NOT NULL AND owner_name_raw IS NOT NULL",
+    );
+  });
 
   const n = async (t: string) =>
     (await db.all<{ n: number }>(`SELECT count(*)::INT AS n FROM ${t}`))[0]?.n ?? 0;
@@ -121,6 +123,6 @@ async function loadTemp(db: Db, name: string, rows: object[]): Promise<void> {
   const path = join(dir, `${name}.ndjson`);
   await writeFile(path, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
   await db.run(
-    `CREATE TEMP TABLE ${name} AS SELECT * FROM read_json_auto('${path}', format='newline_delimited')`,
+    `CREATE TEMP TABLE ${name} AS SELECT * FROM read_json_auto('${sqlString(path)}', format='newline_delimited')`,
   );
 }

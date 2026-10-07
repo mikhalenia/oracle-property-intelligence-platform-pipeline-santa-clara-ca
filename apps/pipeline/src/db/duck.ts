@@ -45,3 +45,18 @@ export async function applySchema(db: Db): Promise<void> {
     .filter(Boolean))
     await db.run(stmt);
 }
+
+export const sqlString = (value: string): string => value.replace(/'/g, "''");
+
+/** Runs fn inside a transaction; rolls back and rethrows on error. */
+export async function withTransaction<T>(db: Db, fn: () => Promise<T>): Promise<T> {
+  await db.run("BEGIN TRANSACTION");
+  try {
+    const result = await fn();
+    await db.run("COMMIT");
+    return result;
+  } catch (err) {
+    await db.run("ROLLBACK");
+    throw err;
+  }
+}

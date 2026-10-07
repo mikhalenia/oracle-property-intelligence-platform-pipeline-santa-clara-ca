@@ -112,4 +112,65 @@ describe("upsertTable", () => {
     expect(rows).toEqual([{ status: "under_inspection" }]);
     await db.close();
   });
+
+  it("rolls back the delete when the insert fails", async () => {
+    const db = await openDb(":memory:");
+    await applySchema(db);
+    const dir = mkdtempSync(join(tmpdir(), "upsert-"));
+    const load = (rows: object[], runId: string, name: string) =>
+      upsertTable(db, {
+        table: "permits",
+        stagingNdjsonPath: ndjson(dir, name, rows),
+        key: "permit_number",
+        runId,
+        fullSource: true,
+      });
+    await load(
+      [permit({}), permit({ permit_number: "P2", record_hash: "hash2" })],
+      "r1",
+      "a.ndjson",
+    );
+    await expect(load([permit({ record_hash: null })], "r2", "b.ndjson")).rejects.toThrow();
+    const rows = await db.all<{ permit_number: string }>(
+      "SELECT permit_number FROM permits ORDER BY 1",
+    );
+    expect(rows).toEqual([{ permit_number: "P1" }, { permit_number: "P2" }]);
+    await db.close();
+  });
+
+  it("dedupes equal-rank duplicates deterministically across runs", async () => {
+    const db = await openDb(":memory:");
+    await applySchema(db);
+    const dir = mkdtempSync(join(tmpdir(), "upsert-"));
+    const parcel = (hash: string) => ({
+      apn: "27715017",
+      situs_address: "a",
+      situs_city: "SJ",
+      situs_zip: "z",
+      jurisdiction: "j",
+      tax_rate_area: "t",
+      lat: 1,
+      lon: 2,
+      ...prov,
+      source_key: "scc-parcels",
+      record_hash: hash,
+    });
+    const run = (runId: string, rows: object[]) =>
+      upsertTable(db, {
+        table: "properties",
+        stagingNdjsonPath: ndjson(dir, `${runId}.ndjson`, rows),
+        key: "apn",
+        runId,
+        fullSource: true,
+      });
+    await run("r1", [parcel("h-b"), parcel("h-a")]);
+    expect(await run("r2", [parcel("h-a"), parcel("h-b")])).toEqual({
+      fetched: 2,
+      inserted: 0,
+      updated: 0,
+      unchanged: 1,
+      removed: 0,
+    });
+    await db.close();
+  });
 });

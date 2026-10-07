@@ -60,14 +60,23 @@ describe("ingest", () => {
       unchanged: 2,
       removed: 1,
     });
-    expect(r2.sources["sj-permits-active"]).toMatchObject({ fetched: 5, skipped: false });
+    expect(r2.sources["sj-permits-active"]).toMatchObject({ fetched: 4, skipped: false });
+    expect(r2.sources["sj-permits-under_inspection"]).toMatchObject({ fetched: 2, skipped: false });
     expect(r2.sources["sj-permits-expired"]).toMatchObject({ skipped: false });
     expect(r2.sources["sj-permits"]).toMatchObject({
       inserted: 1,
-      updated: 1,
-      unchanged: 5,
+      updated: 2,
+      unchanged: 4,
       removed: 0,
     });
+    expect(
+      await db.all(
+        "SELECT status, contractor_company FROM permits WHERE permit_number IN ('2026-101057-CI','2026-130149-CI') ORDER BY permit_number",
+      ),
+    ).toEqual([
+      { status: "under_inspection", contractor_company: "PACIFIC RIDGE BUILDER INC" },
+      { status: "active", contractor_company: "ROOFS R US INC" },
+    ]);
     expect(r2.totals.properties).toBe(2);
     expect(r2.previousRunId).toBe("r1");
 
