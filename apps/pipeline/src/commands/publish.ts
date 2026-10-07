@@ -28,6 +28,10 @@ export async function publish(opts: {
 }): Promise<Manifest> {
   const { db, runId, uploader } = opts;
   const dir = join(opts.exportDir, runId);
+  const existing = (
+    await db.all<{ manifest_cid: string | null }>("SELECT manifest_cid FROM runs WHERE run_id = ?", [runId])
+  )[0];
+  if (existing?.manifest_cid) throw new Error(`run ${runId} already published as ${existing.manifest_cid}`);
   const packed = await packDirectory(dir, EXPORT_FILES);
 
   await uploader.putFile(`${runId}/${runId}.car`, packed.carPath, { import: "car" });
@@ -38,7 +42,6 @@ export async function publish(opts: {
   // the CAR file itself as a plain object so it is fetchable by its own CID
   await uploader.putFile(`${runId}/car/${runId}.car`, packed.carPath);
   const carCid = await uploader.headCid(`${runId}/car/${runId}.car`);
-  if (!carCid) throw new Error("CAR object CID not reported");
 
   const prev = (
     await db.all<{ manifest_cid: string }>(
@@ -58,7 +61,6 @@ export async function publish(opts: {
   await writeFile(manifestPath, JSON.stringify(manifest, null, 2));
   await uploader.putFile(`${runId}/manifest.json`, manifestPath);
   const manifestCid = await uploader.headCid(`${runId}/manifest.json`);
-  if (!manifestCid) throw new Error("manifest CID not reported");
 
   // recorded last: only after every upload succeeded
   await db.run("UPDATE runs SET manifest_cid = ? WHERE run_id = ?", [manifestCid, runId]);

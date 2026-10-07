@@ -5,8 +5,8 @@ import { CID } from "multiformats/cid";
 
 export type Uploader = {
   putFile(key: string, path: string, meta?: Record<string, string>): Promise<void>;
-  /** CIDv1 base32 reported by the pinning service for `key`, or null if not reported in time. */
-  headCid(key: string): Promise<string | null>;
+  /** CIDv1 base32 reported by the pinning service for `key`; throws if none is reported in time. */
+  headCid(key: string): Promise<string>;
 };
 
 export function filebaseUploader(env: { accessKey: string; secretKey: string; bucket: string }): Uploader {
@@ -29,13 +29,18 @@ export function filebaseUploader(env: { accessKey: string; secretKey: string; bu
       }).done();
     },
     async headCid(key) {
-      for (let i = 0; i < 10; i++) {
+      let waited = 0;
+      for (let i = 0; i < 20; i++) {
         const head = await client.send(new HeadObjectCommand({ Bucket: env.bucket, Key: key }));
         const cid = head.Metadata?.["cid"];
         if (cid) return CID.parse(cid).toV1().toString();
-        await new Promise((r) => setTimeout(r, 3000));
+        const delay = Math.min(15_000, 3_000 + i * 1_000);
+        waited += delay;
+        await new Promise((r) => setTimeout(r, delay));
       }
-      return null;
+      throw new Error(
+        `pinning service did not report a CID for ${key} within ${Math.round(waited / 1000)} s`,
+      );
     },
   };
 }

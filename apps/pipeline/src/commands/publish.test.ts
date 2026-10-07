@@ -84,4 +84,17 @@ describe("publish", () => {
     expect(existsSync(join(docsRunsDir, "r2.json"))).toBe(false);
     await db.close();
   });
+
+  it("refuses to republish a run that already has a manifest cid", async () => {
+    const { exportDir, docsRunsDir, expected, db } = await setup();
+    await db.run(
+      "INSERT INTO runs VALUES ('r2','2026-10-08 00:00:00',NULL,'2026-10-08','complete','{}','bafkreidone',NULL)",
+    );
+    const { uploader, puts } = fakeUploader(expected.rootCid);
+    await expect(
+      publish({ db, runId: "r2", exportDir, uploader, docsRunsDir, now: "x" }),
+    ).rejects.toThrow("run r2 already published as bafkreidone");
+    expect(puts).toHaveLength(0);
+    await db.close();
+  });
 });

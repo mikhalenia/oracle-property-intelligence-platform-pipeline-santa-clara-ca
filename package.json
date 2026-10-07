@@ -37,6 +37,7 @@
     "@aws-sdk/lib-storage": "^3.1146.0",
     "@duckdb/node-api": "1.5.6-r.1",
     "@ipld/car": "^5.4.7",
+    "@ipld/dag-pb": "^4.2.0",
     "blockstore-core": "^7.0.1",
     "csv-parse": "^7.0.3",
     "dotenv": "^18.0.5",

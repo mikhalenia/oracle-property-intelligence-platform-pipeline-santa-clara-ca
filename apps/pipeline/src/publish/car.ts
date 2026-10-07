@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { CarWriter } from "@ipld/car";
+import * as dagPb from "@ipld/dag-pb";
 import { MemoryBlockstore } from "blockstore-core/memory";
 import { importer } from "ipfs-unixfs-importer";
 import { fixedSize } from "ipfs-unixfs-importer/chunker";
@@ -66,7 +67,18 @@ export async function packDirectory(dir: string, files: string[]): Promise<PackR
   const carPath = join(dir, "snapshot.car");
   const { writer, out } = CarWriter.create([root]);
   const written = pipeline(Readable.from(out), createWriteStream(carPath));
-  for await (const { cid, bytes } of blockstore.getAll()) await writer.put({ cid, bytes: await collect(bytes) });
+  // MemoryBlockstore.getAll() loses codecs (rebuilds CIDs as raw), so walk the DAG from the
+  // root in a fixed depth-first order and write each block under its true CID.
+  const seen = new Set<string>();
+  const walk = async (cid: CID): Promise<void> => {
+    const key = cid.toString();
+    if (seen.has(key)) return;
+    seen.add(key);
+    const bytes = await collect(blockstore.get(cid));
+    await writer.put({ cid, bytes });
+    if (cid.code === dagPb.code) for (const link of dagPb.decode(bytes).Links) await walk(link.Hash);
+  };
+  await walk(root);
   await writer.close();
   await written;
 
