@@ -2,6 +2,7 @@ import { config } from "dotenv";
 import { mkdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { exportRun } from "./commands/export";
 import { ingest } from "./commands/ingest";
 import { applySchema, openDb } from "./db/duck";
 import { newRunId } from "./run-id";
@@ -34,7 +35,22 @@ async function main(): Promise<void> {
     }
     return;
   }
-  if (["export", "publish", "verify", "sync", "run"].includes(cmd)) {
+  if (cmd === "export") {
+    const db = await openDb(dbPath);
+    try {
+      await applySchema(db);
+      const latest = (
+        await db.all<{ run_id: string }>("SELECT run_id FROM runs ORDER BY started_at DESC LIMIT 1")
+      )[0];
+      if (!latest) throw new Error("no runs found; run ingest first");
+      const outDir = process.env["SCC_EXPORT_DIR"] ?? join(repoRoot, "exports");
+      console.log(JSON.stringify(await exportRun(db, { runId: latest.run_id, outDir }), null, 2));
+    } finally {
+      await db.close();
+    }
+    return;
+  }
+  if (["publish", "verify", "sync", "run"].includes(cmd)) {
     console.log(`${cmd}: not implemented yet`);
     return;
   }
