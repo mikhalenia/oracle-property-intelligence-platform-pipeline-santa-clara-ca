@@ -65,9 +65,10 @@ Verification results reach the Explorer: `verify` writes the report into the run
   there is none, the issue date of a permit whose approvals include "Complete" (confidence medium).
 - Stalled = expired without a final inspection and without a completed approval. An expired
   permit whose approvals include "Complete" is finished work awaiting paperwork: it anchors a
-  medium-confidence roof age and is never listed as stalled or open (`approvalsComplete` in API
+  medium-confidence roof age and is never listed as stalled (`approvalsComplete` in API
   rows, `approvals_complete` and `is_stalled` in `leads.parquet`). Before this rule, 178 of the
   200 aged-roof leads within 5 miles of downtown San José were also listed as stalled permits.
+  An open permit whose approvals are all complete still counts as open; only expired permits without a final inspection are "stalled".
 
 ## Permits that leave the feeds
 
