@@ -54,6 +54,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1146.0",
     "@aws-sdk/lib-storage": "^3.1146.0",
+    "@codemirror/lang-sql": "^6.10.0",
     "@duckdb/duckdb-wasm": "1.33.1-dev57.0",
     "@duckdb/node-api": "1.5.6-r.1",
     "@emotion/react": "^11.14.0",
@@ -64,6 +65,7 @@
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@mui/icons-material": "^9.4.0",
     "@mui/material": "^9.4.0",
+    "@uiw/react-codemirror": "^4.25.12",
     "apache-arrow": "^21.2.0",
     "blockstore-core": "^7.0.1",
     "csv-parse": "^7.0.3",

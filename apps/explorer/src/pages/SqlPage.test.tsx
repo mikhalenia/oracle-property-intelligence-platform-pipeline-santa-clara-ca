@@ -5,6 +5,14 @@ import { SqlPage } from "./SqlPage";
 import * as api from "../api";
 import * as duck from "../duckdb";
 
+vi.mock("@uiw/react-codemirror", () => ({
+  __esModule: true,
+  EditorView: { contentAttributes: { of: () => [] } },
+  default: ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <textarea aria-label="SQL" value={value} onChange={(e) => onChange(e.target.value)} />
+  ),
+}));
+vi.mock("@codemirror/lang-sql", () => ({ sql: () => [] }));
 vi.mock("../api");
 vi.mock("../gateways", async (orig) => ({
   ...(await orig<typeof import("../gateways")>()),
@@ -39,7 +47,7 @@ describe("SqlPage", () => {
     await waitFor(() => expect(duck.loadExamples).toHaveBeenCalled());
     await userEvent.click(await screen.findByRole("combobox"));
     await userEvent.click(await screen.findByRole("option", { name: "Example A" }));
-    const editor = screen.getByRole("textbox", { name: /sql/i });
+    const editor = await screen.findByRole("textbox", { name: /sql/i });
     expect(editor).toHaveValue("SELECT * FROM '{{base}}/leads.parquet'");
     await userEvent.click(screen.getByRole("button", { name: /run/i }));
     await waitFor(() =>
@@ -48,6 +56,25 @@ describe("SqlPage", () => {
       ),
     );
     expect(await screen.findByText(/1 row/)).toBeInTheDocument();
-    expect(screen.getByText(/Gateway in use: ipfs.raribleuserdata.com/)).toBeInTheDocument();
+    expect(screen.getByText("ipfs.raribleuserdata.com")).toBeInTheDocument();
+  });
+
+  it("shows the local-copy notice and snapshot line", async () => {
+    render(<SqlPage />);
+    expect(
+      screen.getByText(/Queries run in a local, in-memory DuckDB copy inside your browser/),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/reloading the page resets everything/)).toBeInTheDocument();
+    expect(await screen.findByText("bafyroot")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "copy bafyroot" })).toBeInTheDocument();
+  });
+
+  it("runs the edited text on Ctrl+Enter", async () => {
+    render(<SqlPage />);
+    await screen.findByText("bafyroot");
+    const editor = await screen.findByRole("textbox", { name: /sql/i });
+    await userEvent.type(editor, "SELECT 2");
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    await waitFor(() => expect(duck.runSql).toHaveBeenCalledWith("SELECT 2"));
   });
 });

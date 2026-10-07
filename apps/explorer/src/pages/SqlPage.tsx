@@ -1,5 +1,6 @@
 import {
   Alert,
+  Box,
   Button,
   MenuItem,
   Paper,
@@ -11,10 +12,12 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { getManifest } from "../api";
+import { CopyButton } from "../CopyButton";
 import { SQL_GATEWAYS, pickGateway } from "../gateways";
 import {
   baseFor,
@@ -25,11 +28,15 @@ import {
   type SqlResult,
 } from "../duckdb";
 
+const shortCid = (c: string) => (c.length > 16 ? `${c.slice(0, 8)}…${c.slice(-6)}` : c);
+const SqlEditor = lazy(() => import("./SqlEditor"));
+
 const show = (v: unknown) =>
   v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
 
 export function SqlPage() {
   const [base, setBase] = useState<string | null>(null);
+  const [rootCid, setRootCid] = useState<string | null>(null);
   const [gateway, setGateway] = useState<string | null>(null);
   const [examples, setExamples] = useState<SqlExample[]>([]);
   const [selected, setSelected] = useState("");
@@ -49,6 +56,7 @@ export function SqlPage() {
       const gw = await pickGateway(root.cid, "leads.parquet");
       if (!live) return;
       setGateway(gw);
+      setRootCid(root.cid);
       setBase(baseFor(root.cid, gw));
       setExamples(await loadExamples(root.cid, gw));
     })().catch(
@@ -86,13 +94,25 @@ export function SqlPage() {
     <Stack spacing={2}>
       <Typography variant="h5">SQL</Typography>
       <Alert severity="info">
-        DuckDB-WASM in your browser reading {base ?? "<gateway>/ipfs/<rootCid>"}/leads.parquet — no
-        server database
+        Queries run in a local, in-memory DuckDB copy inside your browser. Nothing is sent to a
+        server and nothing is saved: reloading the page resets everything, including any INSERT,
+        UPDATE or DELETE you run.
       </Alert>
-      <Typography variant="body2">
-        {gateway
-          ? `Gateway in use: ${gateway} (first of ${SQL_GATEWAYS.join(", ")} answering a range probe; the manifest page shows verification on independent gateways)`
-          : "Choosing a gateway…"}
+      <Typography variant="caption" color="text.secondary" component="div">
+        {gateway && rootCid ? (
+          <>
+            Reading <code>leads.parquet</code> from{" "}
+            <Tooltip
+              title={`First of ${SQL_GATEWAYS.join(", ")} to answer a range probe; the manifest page verifies on independent gateways.`}
+            >
+              <span style={{ textDecoration: "underline dotted", cursor: "help" }}>{gateway}</span>
+            </Tooltip>{" "}
+            (snapshot <code>{shortCid(rootCid)}</code>
+            <CopyButton text={rootCid} />)
+          </>
+        ) : (
+          "Choosing a gateway…"
+        )}
       </Typography>
       {notice && <Alert severity="warning">{notice}</Alert>}
       <TextField
@@ -109,14 +129,33 @@ export function SqlPage() {
           </MenuItem>
         ))}
       </TextField>
-      <TextField
-        label="SQL"
-        multiline
-        minRows={6}
-        value={sql}
-        onChange={(e) => setSql(e.target.value)}
-        slotProps={{ htmlInput: { style: { fontFamily: "monospace" } } }}
-      />
+      <Box
+        onKeyDownCapture={(e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!running && base && sql.trim() !== "") void run();
+          }
+        }}
+        sx={(t) => ({
+          border: `1px solid ${t.palette.divider}`,
+          borderRadius: 1,
+          overflow: "hidden",
+          "&:focus-within": {
+            borderColor: t.palette.primary.main,
+            boxShadow: `0 0 0 1px ${t.palette.primary.main}`,
+          },
+          "& .cm-editor": { fontSize: 14, outline: "none" },
+          "& .cm-scroller": { fontFamily: "ui-monospace, Menlo, Consolas, monospace" },
+        })}
+      >
+        <Suspense fallback={<Box sx={{ height: 220, p: 1 }}>Loading editor…</Box>}>
+          <SqlEditor value={sql} onChange={setSql} />
+        </Suspense>
+      </Box>
+      <Typography variant="caption" color="text.secondary">
+        Cmd/Ctrl+Enter runs the query.
+      </Typography>
       <div>
         <Button
           variant="contained"

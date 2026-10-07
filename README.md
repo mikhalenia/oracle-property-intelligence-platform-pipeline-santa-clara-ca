@@ -138,7 +138,7 @@ An nx + pnpm + TypeScript pipeline that loads Santa Clara County parcels (County
 - `libs/sources`: Socrata and CKAN fetchers that attach provenance (source key, URL, version, fetch time, page SHA-256, record hash)
 - `libs/domain`: pure rules (APN normalization, roofing classifier, permit state, roof age, contractor names, geo)
 - `apps/mcp-server`: Cloudflare Worker (Hono, MCP Streamable HTTP at `/mcp`, same handlers as REST) over D1
-- `apps/explorer`: React + MUI + Vite on Cloudflare (Worker with static assets), DuckDB-WASM reading published Parquet by CID
+- `apps/explorer`: React + MUI + Vite on Cloudflare (Worker with static assets), DuckDB-WASM reading published Parquet by CID The SQL page runs queries in the browser's local in-memory DuckDB copy; nothing is sent to a server or saved.
 - Storage: DuckDB locally; Parquet and CAR on IPFS via Filebase; D1 holds the served snapshot
 - Scheduling: `.github/workflows/ingest.yml`, daily at 00:30 UTC (after San José's 16:00 PT refresh) and on demand
 

@@ -31,7 +31,7 @@ stays within the free tiers (D1: 100k row writes/day); the account currently run
 
 ## 3. DuckDB-backed query layer
 
-- **[Explorer]** SQL page: DuckDB-WASM reads the published Parquet from an IPFS gateway by CID in the browser. The page shows the gateway in use (the first of `ipfs.raribleuserdata.com`, `gateway.pinata.cloud`, `ipfs.filebase.io` to answer a range probe). Run a pre-filled example query. No Oracle-hosted database is involved.
+- **[Explorer]** SQL page: DuckDB-WASM reads the published Parquet from an IPFS gateway by CID in the browser. The page shows the gateway in use (the first of `ipfs.raribleuserdata.com`, `gateway.pinata.cloud`, `ipfs.filebase.io` to answer a range probe). Run a pre-filled example query; it executes in a local, in-memory DuckDB copy in the browser (nothing is sent to a server or saved). No Oracle-hosted database is involved.
 - Without the Explorer: `pnpm nx run pipeline:cli -- export` writes the same Parquet locally and `duckdb` can query it.
 
 ## 4. Artifact manifest
