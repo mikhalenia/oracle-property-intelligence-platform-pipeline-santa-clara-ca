@@ -11,3 +11,5 @@ exports/
 coverage/
 .superpowers/
 vitest.config.*.timestamp*
+
+vite.config.*.timestamp*

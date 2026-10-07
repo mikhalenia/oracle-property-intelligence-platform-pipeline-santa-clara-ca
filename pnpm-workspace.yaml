@@ -5,6 +5,7 @@ allowBuilds:
   nx: true
   workerd: true
   esbuild: true
+  "@swc/core": false
 minimumReleaseAgeExclude:
   - miniflare@5.20261006.0-alpha
   - wrangler@4.148.0
