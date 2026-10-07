@@ -1,10 +1,13 @@
+import { execFile } from "node:child_process";
 import { config } from "dotenv";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { exportRun } from "./commands/export";
 import { ingest } from "./commands/ingest";
 import { publish } from "./commands/publish";
+import { sync } from "./commands/sync";
 import { verifyManifest } from "./commands/verify";
 import { applySchema, openDb } from "./db/duck";
 import { filebaseUploader } from "./publish/filebase";
@@ -113,7 +116,64 @@ async function main(): Promise<void> {
     if (!report.ok) process.exitCode = 1;
     return;
   }
-  if (["sync", "run"].includes(cmd)) {
+  if (cmd === "sync") {
+    const exportDir = process.env["SCC_EXPORT_DIR"] ?? join(repoRoot, "exports");
+    const cwd = join(repoRoot, "apps/mcp-server");
+    const wrangler = async (args: string[]): Promise<void> => {
+      try {
+        await promisify(execFile)("npx", ["wrangler", ...args], {
+          cwd,
+          maxBuffer: 64 * 1024 * 1024,
+        });
+      } catch (err) {
+        const e = err as { stderr?: string; message: string };
+        throw new Error(`wrangler ${args.join(" ")} failed: ${e.stderr || e.message}`, {
+          cause: err,
+        });
+      }
+    };
+    const db = await openDb(dbPath);
+    try {
+      await applySchema(db);
+      const latest = (
+        await db.all<{ run_id: string; manifest_cid: string | null }>(
+          "SELECT run_id, manifest_cid FROM runs ORDER BY started_at DESC LIMIT 1",
+        )
+      )[0];
+      if (!latest) throw new Error("no runs found; run ingest first");
+      if (!latest.manifest_cid)
+        throw new Error(`run ${latest.run_id} is not published; run publish first`);
+      let migrated = false;
+      const res = await sync({
+        db,
+        runId: latest.run_id,
+        manifestCid: latest.manifest_cid,
+        outDir: exportDir,
+        exec: async (file) => {
+          if (!migrated) {
+            console.log("applying D1 migrations");
+            await wrangler(["d1", "migrations", "apply", "scc-snapshot", "--remote"]);
+            migrated = true;
+          }
+          console.log(`executing ${file}`);
+          await wrangler([
+            "d1",
+            "execute",
+            "scc-snapshot",
+            "--remote",
+            "--file",
+            resolve(file),
+            "--yes",
+          ]);
+        },
+      });
+      console.log(JSON.stringify(res, null, 2));
+    } finally {
+      await db.close();
+    }
+    return;
+  }
+  if (cmd === "run") {
     console.log(`${cmd}: not implemented yet`);
     return;
   }
