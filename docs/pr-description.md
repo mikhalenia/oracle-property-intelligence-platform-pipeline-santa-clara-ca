@@ -101,5 +101,3 @@ No kit agent was run to build this. What follows is influence on the design, not
 - Publication conventions (CIDv1, a CAR per snapshot, a manifest with cid/size/sha256, immutable republish) follow the Elephant oracle skills' publication model named in the assignment.
 - The MCP server serves an accepted snapshot synced into D1 and never fetches remote archives per request, the pattern described in the kit's `deploy-open-data-mcp` skill; see `apps/pipeline/src/sync` and `apps/mcp-server/src/queries.ts`.
 - Engineering baseline from the kit's `apply-engineering-guidelines`: TypeScript strict, nx, Vitest, GitHub Actions, Conventional Commits. The Cloudflare deviation is stated above.
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)

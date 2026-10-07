@@ -42,7 +42,7 @@
 - [ ] **Step 1: Node and package manager**
 
 ```bash
-cd /Users/mikhalenia/sandbox/prism/oracle-property-intelligence-platform-pipeline-santa-clara-ca
+cd <path-to-this-repo>
 echo 22 > .nvmrc
 corepack enable && corepack prepare pnpm@latest --activate
 pnpm init
