@@ -10,7 +10,7 @@
       "options": { "cwd": "apps/explorer" }
     },
     "deploy": {
-      "command": "wrangler pages deploy dist --project-name scc-explorer",
+      "command": "wrangler deploy",
       "dependsOn": ["build"],
       "options": { "cwd": "apps/explorer" }
     }
