@@ -1,0 +1,855 @@
+{
+  "runId": "2026-10-07T17-10-54Z",
+  "startedAt": "2026-10-07T17:10:54.930Z",
+  "finishedAt": "2026-10-07T17:15:02.673Z",
+  "asOf": "2026-10-07",
+  "status": "complete",
+  "sources": {
+    "scc-parcels": {
+      "fetched": 494841,
+      "inserted": 494841,
+      "updated": 0,
+      "unchanged": 0,
+      "removed": 0,
+      "sourceVersion": "2026-08-26T16:22:37.562Z",
+      "skipped": false
+    },
+    "sj-permits-active": {
+      "fetched": 17291,
+      "inserted": 0,
+      "updated": 0,
+      "unchanged": 0,
+      "removed": 0,
+      "sourceVersion": "2026-10-07T16:00:08.297041",
+      "skipped": true
+    },
+    "sj-permits-under_inspection": {
+      "fetched": 10609,
+      "inserted": 0,
+      "updated": 0,
+      "unchanged": 0,
+      "removed": 0,
+      "sourceVersion": "2026-10-07T16:00:04.103534",
+      "skipped": true
+    },
+    "sj-permits-expired": {
+      "fetched": 75802,
+      "inserted": 0,
+      "updated": 0,
+      "unchanged": 0,
+      "removed": 0,
+      "sourceVersion": "2026-10-07T16:00:06.449937",
+      "skipped": true
+    }
+  },
+  "totals": {
+    "properties": 494841,
+    "permits": 93093,
+    "roofingPermits": 7751,
+    "contractors": 8920,
+    "owners": 77359,
+    "roofAge": 7151
+  },
+  "limitations": [
+    "Permits cover the City of San José only; the other 15 jurisdictions have no open bulk feed in this milestone.",
+    "No public owner mailing address or transfer date (Assessor roll is paid); ownership is observed from permit records.",
+    "No public year-built field; roof age is derived only from completed roofing permits.",
+    "BBB ratings are not publicly downloadable; bbb_rating is always null."
+  ],
+  "previousRunId": "2026-10-07T17-05-59Z",
+  "manifestCid": "bafybeidav5d5sigbbrvfhaexjxa6nqszyfmcpscyhqpnuv65hribw7y4jq",
+  "manifest": {
+    "schema": "scc-manifest/1",
+    "runId": "2026-10-07T17-10-54Z",
+    "publishedAt": "2026-10-07T17:25:52.652Z",
+    "county": "Santa Clara",
+    "state": "CA",
+    "fips": "06085",
+    "previousManifestCid": null,
+    "artifacts": [
+      {
+        "cid": "bafybeict6ibbchgt3ymi7v4re7354kfvwnryuoqpa4bjfa3moicfeoswiu",
+        "name": "snapshot",
+        "path": "/",
+        "size": 551,
+        "codec": "directory",
+        "sha256": "53f202111cd3de188fd79127f7de28b5b3638a3a0f070292836c7204523a5645"
+      },
+      {
+        "cid": "bafkreibz2mq3drwrq4tfggtdm6igltbf4g3dpfgdyrt23mdlt3nzl6kheq",
+        "name": "contractors.parquet",
+        "path": "/contractors.parquet",
+        "size": 238584,
+        "codec": "file",
+        "sha256": "39d321b1c6d18726531a63679065cc25e1b63794c3c467adb06b9edb95f94724"
+      },
+      {
+        "cid": "bafkreigacann4wwdk4rvw7ujtqpxecvqnefg7tjgzrnedcqgfks7az5alu",
+        "name": "coverage.json",
+        "path": "/coverage.json",
+        "size": 1508,
+        "codec": "file",
+        "sha256": "c0101ade5ac357235b7e899c1f720ab0690a6fcd26cc5a418a062aa5f067a05d"
+      },
+      {
+        "cid": "bafkreicpdjyuevgxjxmvujrbbxwtqurcefogatoaddt3kepjolp2eqlg3m",
+        "name": "leads.parquet",
+        "path": "/leads.parquet",
+        "size": 470126,
+        "codec": "file",
+        "sha256": "4f1a714254d74dd95a26210ded385222215c604dc018e7b511e972dfa24166db"
+      },
+      {
+        "cid": "bafybeibp4obkaazlu6qw5mxguhqe7psid3j2jhwj6nluq7o35f6c47b2wa",
+        "name": "owners.parquet",
+        "path": "/owners.parquet",
+        "size": 1696507,
+        "codec": "file",
+        "sha256": "85c7ea1b613b17babe5d0e33371c6dace04aca408b3b09ca5fba0493e0d425c5"
+      },
+      {
+        "cid": "bafybeigygsnqbklxhysylrsc5bzdcydbpdog3373ayfpas3jyu6mrc6yo4",
+        "name": "permits.parquet",
+        "path": "/permits.parquet",
+        "size": 9182676,
+        "codec": "file",
+        "sha256": "6de8573faf3bbc64466316b2add0a4ca6d461572d434821028203ea7bc23b5ba"
+      },
+      {
+        "cid": "bafybeifpla4tepbcnpod7onumf7aqrzhjocxp7eucfzho4pdowirlafome",
+        "name": "properties.parquet",
+        "path": "/properties.parquet",
+        "size": 30215417,
+        "codec": "file",
+        "sha256": "ba74b3be8e55dd2820d5c05478a4478c205bb3513b6ea8a09ff4eeebf881040b"
+      },
+      {
+        "cid": "bafkreicfjqmv5ria7fqoydmvrmew7ygre53s3bamfyglzlom5kwj7cg3hi",
+        "name": "roof_age.parquet",
+        "path": "/roof_age.parquet",
+        "size": 89400,
+        "codec": "file",
+        "sha256": "454c195ec500f960ec0d958b096fe0d127772d840c2e0cbcadcceaac9f88db3a"
+      },
+      {
+        "cid": "bafkreifingna3clf26acxe3djo4mom5s7you4ans2ehfndn3gb2qgytr4a",
+        "name": "runs.json",
+        "path": "/runs.json",
+        "size": 4027,
+        "codec": "file",
+        "sha256": "a8699a0d8965d7802b93634bb8c733b2fe1d4e01b2d10e568dbb3075036271e0"
+      },
+      {
+        "cid": "bafkreidqxaxpawvclkjgaahipimnhk2c46rvjp7vbj2hn2l3b3xxzwvmee",
+        "name": "sql-examples.json",
+        "path": "/sql-examples.json",
+        "size": 1198,
+        "codec": "file",
+        "sha256": "70b82ef05aa25a926000e87a18d3ab42e7a354bff50a7476e97b0eef7cdaac21"
+      }
+    ],
+    "car": {
+      "cid": "bafybeic2s2oiuq5edcuj52e2lhgxmms442pk56fqtzg746c2oun5quo2b4",
+      "name": "2026-10-07T17-10-54Z.car",
+      "path": "/2026-10-07T17-10-54Z.car",
+      "size": 41904022,
+      "codec": "file",
+      "sha256": "2dd8a7d06d3be3a6d22276752413502ade6cb7cc0dff346bca72bcf7d1d76b80",
+      "root": "bafybeict6ibbchgt3ymi7v4re7354kfvwnryuoqpa4bjfa3moicfeoswiu"
+    },
+    "gatewayUrlTemplate": "https://{gateway}/ipfs/{cid}",
+    "ipns": null
+  },
+  "manifestSha256": "299ec26459d364e2aba848ddff0b2a13dfa2237932b9aab614a1aa9ee810466c",
+  "verification": {
+    "runId": "2026-10-07T17-10-54Z",
+    "verifiedAt": "2026-10-07T17:51:57.322Z",
+    "ok": true,
+    "minIndependent": 2,
+    "gateways": [
+      "gateway.pinata.cloud",
+      "ipfs.ssi.eecc.de",
+      "ipfs.raribleuserdata.com",
+      "dweb.link",
+      "ipfs.io",
+      "w3s.link",
+      "ipfs.filebase.io"
+    ],
+    "artifacts": [
+      {
+        "cid": "bafybeict6ibbchgt3ymi7v4re7354kfvwnryuoqpa4bjfa3moicfeoswiu",
+        "name": "snapshot",
+        "codec": "directory",
+        "size": 551,
+        "results": [
+          {
+            "gateway": "gateway.pinata.cloud",
+            "status": 200,
+            "bytes": 41904022,
+            "sha256Match": true,
+            "ms": 12190
+          },
+          {
+            "gateway": "ipfs.ssi.eecc.de",
+            "status": "error",
+            "bytes": 0,
+            "sha256Match": false,
+            "note": "TypeError: terminated",
+            "ms": 263644
+          },
+          {
+            "gateway": "ipfs.raribleuserdata.com",
+            "status": 200,
+            "bytes": 41904022,
+            "sha256Match": true,
+            "ms": 5675
+          },
+          {
+            "gateway": "dweb.link",
+            "status": 522,
+            "bytes": 7282,
+            "sha256Match": false,
+            "note": "<!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class",
+            "ms": 123685
+          },
+          {
+            "gateway": "ipfs.io",
+            "status": 522,
+            "bytes": 7282,
+            "sha256Match": false,
+            "note": "<!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class",
+            "ms": 123900
+          },
+          {
+            "gateway": "w3s.link",
+            "status": 522,
+            "bytes": 7282,
+            "sha256Match": false,
+            "note": "<!DOCTYPE html>\n<!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]-->\n<!--[if IE 7]>    <html class",
+            "ms": 124401
+          },
+          {
+            "gateway": "ipfs.filebase.io",
+            "status": 200,
+            "bytes": 41904022,
+            "sha256Match": true,
+            "ms": 4128
+          }
+        ],
+        "independentOk": 2
+      },
+      {
+        "cid": "bafkreibz2mq3drwrq4tfggtdm6igltbf4g3dpfgdyrt23mdlt3nzl6kheq",
+        "name": "contractors.parquet",
+        "codec": "file",
+        "size": 238584,
+        "results": [
+          {
+            "gateway": "gateway.pinata.cloud",
+            "status": 200,
+            "bytes": 238584,
+            "sha256Match": true,
+            "ms": 6509
+          },
+          {
+            "gateway": "ipfs.ssi.eecc.de",
+            "status": 200,
+            "bytes": 238584,
+            "sha256Match": true,
+            "ms": 465
+          },
+          {
+            "gateway": "ipfs.raribleuserdata.com",
+            "status": 200,
+            "bytes": 238584,
+            "sha256Match": true,
+            "ms": 745
+          },
+          {
+            "gateway": "dweb.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreibz2mq3d",
+            "ms": 6190
+          },
+          {
+            "gateway": "ipfs.io",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreibz2mq3d",
+            "ms": 6116
+          },
+          {
+            "gateway": "w3s.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreibz2mq3d",
+            "ms": 6280
+          },
+          {
+            "gateway": "ipfs.filebase.io",
+            "status": 200,
+            "bytes": 238584,
+            "sha256Match": true,
+            "ms": 639
+          }
+        ],
+        "independentOk": 3
+      },
+      {
+        "cid": "bafkreigacann4wwdk4rvw7ujtqpxecvqnefg7tjgzrnedcqgfks7az5alu",
+        "name": "coverage.json",
+        "codec": "file",
+        "size": 1508,
+        "results": [
+          {
+            "gateway": "gateway.pinata.cloud",
+            "status": 200,
+            "bytes": 1508,
+            "sha256Match": true,
+            "ms": 6177
+          },
+          {
+            "gateway": "ipfs.ssi.eecc.de",
+            "status": 200,
+            "bytes": 1508,
+            "sha256Match": true,
+            "ms": 699
+          },
+          {
+            "gateway": "ipfs.raribleuserdata.com",
+            "status": 200,
+            "bytes": 1508,
+            "sha256Match": true,
+            "ms": 302
+          },
+          {
+            "gateway": "dweb.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreigacann4",
+            "ms": 6156
+          },
+          {
+            "gateway": "ipfs.io",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreigacann4",
+            "ms": 6133
+          },
+          {
+            "gateway": "w3s.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreigacann4",
+            "ms": 6266
+          },
+          {
+            "gateway": "ipfs.filebase.io",
+            "status": 200,
+            "bytes": 1508,
+            "sha256Match": true,
+            "ms": 132
+          }
+        ],
+        "independentOk": 3
+      },
+      {
+        "cid": "bafkreicpdjyuevgxjxmvujrbbxwtqurcefogatoaddt3kepjolp2eqlg3m",
+        "name": "leads.parquet",
+        "codec": "file",
+        "size": 470126,
+        "results": [
+          {
+            "gateway": "gateway.pinata.cloud",
+            "status": 200,
+            "bytes": 470126,
+            "sha256Match": true,
+            "ms": 7546
+          },
+          {
+            "gateway": "ipfs.ssi.eecc.de",
+            "status": 200,
+            "bytes": 470126,
+            "sha256Match": true,
+            "ms": 7005
+          },
+          {
+            "gateway": "ipfs.raribleuserdata.com",
+            "status": 200,
+            "bytes": 470126,
+            "sha256Match": true,
+            "ms": 1026
+          },
+          {
+            "gateway": "dweb.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreicpdjyue",
+            "ms": 6143
+          },
+          {
+            "gateway": "ipfs.io",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreicpdjyue",
+            "ms": 6129
+          },
+          {
+            "gateway": "w3s.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreicpdjyue",
+            "ms": 6261
+          },
+          {
+            "gateway": "ipfs.filebase.io",
+            "status": 200,
+            "bytes": 470126,
+            "sha256Match": true,
+            "ms": 55509
+          }
+        ],
+        "independentOk": 3
+      },
+      {
+        "cid": "bafybeibp4obkaazlu6qw5mxguhqe7psid3j2jhwj6nluq7o35f6c47b2wa",
+        "name": "owners.parquet",
+        "codec": "file",
+        "size": 1696507,
+        "results": [
+          {
+            "gateway": "gateway.pinata.cloud",
+            "status": 200,
+            "bytes": 1696507,
+            "sha256Match": true,
+            "ms": 5371
+          },
+          {
+            "gateway": "ipfs.ssi.eecc.de",
+            "status": 200,
+            "bytes": 1696507,
+            "sha256Match": true,
+            "ms": 1784
+          },
+          {
+            "gateway": "ipfs.raribleuserdata.com",
+            "status": 200,
+            "bytes": 1696507,
+            "sha256Match": true,
+            "ms": 1038
+          },
+          {
+            "gateway": "dweb.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafybeibp4obka",
+            "ms": 6145
+          },
+          {
+            "gateway": "ipfs.io",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafybeibp4obka",
+            "ms": 6210
+          },
+          {
+            "gateway": "w3s.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafybeibp4obka",
+            "ms": 6266
+          },
+          {
+            "gateway": "ipfs.filebase.io",
+            "status": 200,
+            "bytes": 1696507,
+            "sha256Match": true,
+            "ms": 953
+          }
+        ],
+        "independentOk": 3
+      },
+      {
+        "cid": "bafybeigygsnqbklxhysylrsc5bzdcydbpdog3373ayfpas3jyu6mrc6yo4",
+        "name": "permits.parquet",
+        "codec": "file",
+        "size": 9182676,
+        "results": [
+          {
+            "gateway": "gateway.pinata.cloud",
+            "status": 200,
+            "bytes": 9182676,
+            "sha256Match": true,
+            "ms": 7657
+          },
+          {
+            "gateway": "ipfs.ssi.eecc.de",
+            "status": 200,
+            "bytes": 9182676,
+            "sha256Match": true,
+            "ms": 4492
+          },
+          {
+            "gateway": "ipfs.raribleuserdata.com",
+            "status": 200,
+            "bytes": 9182676,
+            "sha256Match": true,
+            "ms": 1762
+          },
+          {
+            "gateway": "dweb.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafybeigygsnqb",
+            "ms": 6157
+          },
+          {
+            "gateway": "ipfs.io",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafybeigygsnqb",
+            "ms": 6169
+          },
+          {
+            "gateway": "w3s.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafybeigygsnqb",
+            "ms": 6264
+          },
+          {
+            "gateway": "ipfs.filebase.io",
+            "status": 200,
+            "bytes": 9182676,
+            "sha256Match": true,
+            "ms": 2211
+          }
+        ],
+        "independentOk": 3
+      },
+      {
+        "cid": "bafybeifpla4tepbcnpod7onumf7aqrzhjocxp7eucfzho4pdowirlafome",
+        "name": "properties.parquet",
+        "codec": "file",
+        "size": 30215417,
+        "results": [
+          {
+            "gateway": "gateway.pinata.cloud",
+            "status": 200,
+            "bytes": 30215417,
+            "sha256Match": true,
+            "ms": 11044
+          },
+          {
+            "gateway": "ipfs.ssi.eecc.de",
+            "status": "error",
+            "bytes": 0,
+            "sha256Match": false,
+            "note": "TypeError: terminated",
+            "ms": 186777
+          },
+          {
+            "gateway": "ipfs.raribleuserdata.com",
+            "status": 200,
+            "bytes": 30215417,
+            "sha256Match": true,
+            "ms": 2842
+          },
+          {
+            "gateway": "dweb.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafybeifpla4te",
+            "ms": 6184
+          },
+          {
+            "gateway": "ipfs.io",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafybeifpla4te",
+            "ms": 6124
+          },
+          {
+            "gateway": "w3s.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafybeifpla4te",
+            "ms": 6324
+          },
+          {
+            "gateway": "ipfs.filebase.io",
+            "status": 200,
+            "bytes": 30215417,
+            "sha256Match": true,
+            "ms": 3260
+          }
+        ],
+        "independentOk": 2
+      },
+      {
+        "cid": "bafkreicfjqmv5ria7fqoydmvrmew7ygre53s3bamfyglzlom5kwj7cg3hi",
+        "name": "roof_age.parquet",
+        "codec": "file",
+        "size": 89400,
+        "results": [
+          {
+            "gateway": "gateway.pinata.cloud",
+            "status": 200,
+            "bytes": 89400,
+            "sha256Match": true,
+            "ms": 5922
+          },
+          {
+            "gateway": "ipfs.ssi.eecc.de",
+            "status": 200,
+            "bytes": 89400,
+            "sha256Match": true,
+            "ms": 2710
+          },
+          {
+            "gateway": "ipfs.raribleuserdata.com",
+            "status": 200,
+            "bytes": 89400,
+            "sha256Match": true,
+            "ms": 482
+          },
+          {
+            "gateway": "dweb.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreicfjqmv5",
+            "ms": 6142
+          },
+          {
+            "gateway": "ipfs.io",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreicfjqmv5",
+            "ms": 6116
+          },
+          {
+            "gateway": "w3s.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreicfjqmv5",
+            "ms": 6276
+          },
+          {
+            "gateway": "ipfs.filebase.io",
+            "status": 200,
+            "bytes": 89400,
+            "sha256Match": true,
+            "ms": 309
+          }
+        ],
+        "independentOk": 3
+      },
+      {
+        "cid": "bafkreifingna3clf26acxe3djo4mom5s7you4ans2ehfndn3gb2qgytr4a",
+        "name": "runs.json",
+        "codec": "file",
+        "size": 4027,
+        "results": [
+          {
+            "gateway": "gateway.pinata.cloud",
+            "status": 200,
+            "bytes": 4027,
+            "sha256Match": true,
+            "ms": 4655
+          },
+          {
+            "gateway": "ipfs.ssi.eecc.de",
+            "status": 200,
+            "bytes": 4027,
+            "sha256Match": true,
+            "ms": 626
+          },
+          {
+            "gateway": "ipfs.raribleuserdata.com",
+            "status": 200,
+            "bytes": 4027,
+            "sha256Match": true,
+            "ms": 272
+          },
+          {
+            "gateway": "dweb.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreifingna3",
+            "ms": 6149
+          },
+          {
+            "gateway": "ipfs.io",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreifingna3",
+            "ms": 6155
+          },
+          {
+            "gateway": "w3s.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreifingna3",
+            "ms": 6281
+          },
+          {
+            "gateway": "ipfs.filebase.io",
+            "status": 200,
+            "bytes": 4027,
+            "sha256Match": true,
+            "ms": 305
+          }
+        ],
+        "independentOk": 3
+      },
+      {
+        "cid": "bafkreidqxaxpawvclkjgaahipimnhk2c46rvjp7vbj2hn2l3b3xxzwvmee",
+        "name": "sql-examples.json",
+        "codec": "file",
+        "size": 1198,
+        "results": [
+          {
+            "gateway": "gateway.pinata.cloud",
+            "status": 200,
+            "bytes": 1198,
+            "sha256Match": true,
+            "ms": 6412
+          },
+          {
+            "gateway": "ipfs.ssi.eecc.de",
+            "status": 200,
+            "bytes": 1198,
+            "sha256Match": true,
+            "ms": 1201
+          },
+          {
+            "gateway": "ipfs.raribleuserdata.com",
+            "status": 200,
+            "bytes": 1198,
+            "sha256Match": true,
+            "ms": 481
+          },
+          {
+            "gateway": "dweb.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreidqxaxpa",
+            "ms": 6149
+          },
+          {
+            "gateway": "ipfs.io",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreidqxaxpa",
+            "ms": 6138
+          },
+          {
+            "gateway": "w3s.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafkreidqxaxpa",
+            "ms": 6250
+          },
+          {
+            "gateway": "ipfs.filebase.io",
+            "status": 200,
+            "bytes": 1198,
+            "sha256Match": true,
+            "ms": 356
+          }
+        ],
+        "independentOk": 3
+      },
+      {
+        "cid": "bafybeic2s2oiuq5edcuj52e2lhgxmms442pk56fqtzg746c2oun5quo2b4",
+        "name": "2026-10-07T17-10-54Z.car",
+        "codec": "file",
+        "size": 41904022,
+        "results": [
+          {
+            "gateway": "gateway.pinata.cloud",
+            "status": 200,
+            "bytes": 41904022,
+            "sha256Match": true,
+            "ms": 6971
+          },
+          {
+            "gateway": "ipfs.ssi.eecc.de",
+            "status": "error",
+            "bytes": 0,
+            "sha256Match": false,
+            "note": "TimeoutError: The operation was aborted due to timeout",
+            "ms": 246222
+          },
+          {
+            "gateway": "ipfs.raribleuserdata.com",
+            "status": 200,
+            "bytes": 41904022,
+            "sha256Match": true,
+            "ms": 5841
+          },
+          {
+            "gateway": "dweb.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafybeic2s2oiu",
+            "ms": 6290
+          },
+          {
+            "gateway": "ipfs.io",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafybeic2s2oiu",
+            "ms": 6172
+          },
+          {
+            "gateway": "w3s.link",
+            "status": 429,
+            "bytes": 188,
+            "sha256Match": false,
+            "note": "This IPFS gateway is switching to a service worker gateway only. See https://gatewaychanges.ipfs.io#/ipfs/bafybeic2s2oiu",
+            "ms": 6284
+          },
+          {
+            "gateway": "ipfs.filebase.io",
+            "status": 200,
+            "bytes": 41904022,
+            "sha256Match": true,
+            "ms": 4890
+          }
+        ],
+        "independentOk": 2
+      }
+    ]
+  }
+}
