@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { bboxCenter, normalizeApn } from "@scc/domain";
 import { sha256Hex } from "./hash";
-import { fetchWithRetry, type Fetcher } from "./http";
+import { fetchAndRead, fetchWithRetry, type Fetcher } from "./http";
 import { recordHash, type Provenance } from "./provenance";
 
 export const PARCELS_URL = "https://data.sccgov.org/resource/ubcd-cewv.json";
@@ -73,17 +73,24 @@ export async function* fetchParcelPages(
     outDir: string;
     sourceVersion: string;
     fetchedAt: string;
+    baseDelayMs?: number;
   },
 ): AsyncGenerator<{ pageIndex: number; rows: ParcelRow[]; skippedNoApn: number }> {
-  const pageSize = opts.pageSize ?? 50_000;
+  const pageSize = opts.pageSize ?? 10_000;
   await mkdir(opts.outDir, { recursive: true });
   for (let pageIndex = 0; pageIndex < (opts.maxPages ?? Infinity); pageIndex++) {
     const url = `${PARCELS_URL}?$order=objectid&$limit=${pageSize}&$offset=${pageIndex * pageSize}`;
-    const res = await fetchWithRetry(fetcher, url, undefined, { retries: 4, baseDelayMs: 2000 });
-    const bytes = new Uint8Array(await res.arrayBuffer());
+    const { bytes, raws } = await fetchAndRead(
+      fetcher,
+      url,
+      async (res) => {
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        return { bytes, raws: JSON.parse(new TextDecoder().decode(bytes)) as RawParcel[] };
+      },
+      { retries: 4, baseDelayMs: opts.baseDelayMs ?? 2000, timeoutMs: 120_000 },
+    );
     const pageSha256 = sha256Hex(bytes);
     await writeFile(join(opts.outDir, `page-${String(pageIndex).padStart(4, "0")}.json`), bytes);
-    const raws = JSON.parse(new TextDecoder().decode(bytes)) as RawParcel[];
     if (raws.length === 0) return;
     const prov: Provenance = {
       sourceKey: PARCELS_SOURCE_KEY,

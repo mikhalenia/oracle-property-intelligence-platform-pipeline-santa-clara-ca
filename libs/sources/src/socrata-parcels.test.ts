@@ -47,4 +47,32 @@ describe("socrata parcels", () => {
     expect(second?.lat).toBeCloseTo(37.305, 6);
     expect(second?.lon).toBeCloseTo(-121.895, 6);
   });
+
+  it("retries a page whose body read fails", async () => {
+    const broken = new Response(
+      new ReadableStream({
+        start(c) {
+          c.error(new TypeError("terminated"));
+        },
+      }),
+    );
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(broken)
+      .mockResolvedValueOnce(new Response(page))
+      .mockResolvedValueOnce(new Response("[]"));
+    const pages = [];
+    for await (const p of fetchParcelPages(fetcher, {
+      pageSize: 3,
+      outDir: mkdtempSync(join(tmpdir(), "parcels-")),
+      sourceVersion: "v1",
+      fetchedAt: "2026-10-08T00:00:00Z",
+      baseDelayMs: 1,
+    }))
+      pages.push(p);
+    expect(pages).toHaveLength(1);
+    expect(pages[0]?.rows).toHaveLength(2);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher.mock.calls[0]?.[0]).toBe(fetcher.mock.calls[1]?.[0]);
+  });
 });
