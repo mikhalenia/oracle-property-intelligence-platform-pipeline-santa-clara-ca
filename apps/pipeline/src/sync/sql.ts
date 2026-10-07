@@ -97,30 +97,50 @@ export function sqlLiteral(v: unknown): string {
 
 export async function* buildD1Statements(
   db: Db,
-  opts: { manifestCid: string; runId: string; batchSize?: number; statementsPerFile?: number },
+  opts: {
+    manifestCid: string;
+    runId: string;
+    batchSize?: number;
+    statementsPerFile?: number;
+    maxStatementBytes?: number;
+  },
 ): AsyncGenerator<string> {
   const batchSize = opts.batchSize ?? 500;
   const statementsPerFile = opts.statementsPerFile ?? 50;
+  const maxBytes = opts.maxStatementBytes ?? 65_536;
   yield `${D1_TABLES.map((t) => `DELETE FROM ${t};`).join("\n")}\n`;
 
   for (const table of D1_TABLES) {
     const cols = D1_COLUMNS[table];
     const select = cols.map((c) => (TEXT_COLUMNS.has(c) ? `${c}::TEXT AS ${c}` : c)).join(", ");
     const orderBy = table === "owners" ? "apn, permit_number" : cols[0];
+    const head = `INSERT INTO ${table} (${cols.join(", ")}) VALUES\n`;
     let pending: string[] = [];
+    let tuples: string[] = [];
+    let size = head.length + 1;
+    const flush = (): void => {
+      pending.push(`${head}${tuples.join(",\n")};`);
+      tuples = [];
+      size = head.length + 1;
+    };
     for (let offset = 0; ; offset += batchSize) {
       const rows = await db.all<Record<string, unknown>>(
         `SELECT ${select} FROM ${table} ORDER BY ${orderBy} LIMIT ${batchSize} OFFSET ${offset}`,
       );
-      if (rows.length === 0) break;
-      const values = rows.map((r) => `(${cols.map((c) => sqlLiteral(r[c])).join(", ")})`);
-      pending.push(`INSERT INTO ${table} (${cols.join(", ")}) VALUES\n${values.join(",\n")};`);
-      if (pending.length >= statementsPerFile) {
-        yield `${pending.join("\n")}\n`;
-        pending = [];
+      for (const r of rows) {
+        const tuple = `(${cols.map((c) => sqlLiteral(r[c])).join(", ")})`;
+        if (tuples.length > 0 && (size + tuple.length + 2 > maxBytes || tuples.length >= batchSize))
+          flush();
+        tuples.push(tuple);
+        size += tuple.length + 2;
+        if (pending.length >= statementsPerFile) {
+          yield `${pending.join("\n")}\n`;
+          pending = [];
+        }
       }
       if (rows.length < batchSize) break;
     }
+    if (tuples.length > 0) flush();
     if (pending.length > 0) yield `${pending.join("\n")}\n`;
   }
 

@@ -106,4 +106,40 @@ describe("buildD1Statements", () => {
       ).toEqual([...cols]);
     }
   });
+
+  it("cuts insert statements by size and never drops oversized rows", async () => {
+    const db = await openDb(":memory:");
+    await applySchema(db);
+    const src = "'k','http://x','v1','2026-10-01 00:00:00'";
+    const big = "x".repeat(3000);
+    for (let i = 0; i < 7; i++)
+      await db.run(
+        `INSERT INTO properties VALUES ('B${i}','${big}','C','1','J','t',1,2,${src},'h','h','r','r','r')`,
+      );
+    await db.run(
+      `INSERT INTO properties VALUES ('B9','${"y".repeat(9000)}','C','1','J','t',1,2,${src},'h','h','r','r','r')`,
+    );
+    const stmts: string[] = [];
+    const order: string[] = [];
+    for await (const c of buildD1Statements(db, {
+      manifestCid: "c",
+      runId: "r1",
+      maxStatementBytes: 8_000,
+    })) {
+      order.push(c.slice(0, 20));
+      for (const st of c.split(/;\n/).filter((x) => x.startsWith("INSERT INTO properties ")))
+        stmts.push(st);
+    }
+    await db.close();
+    expect(order[0]).toMatch(/^DELETE FROM/);
+    expect(order[order.length - 1]).toMatch(/^INSERT INTO snapshot/);
+    const rows = stmts.map((st) => st.match(/\('B\d'/g)!.length);
+    expect(rows.reduce((a, b) => a + b, 0)).toBe(8);
+    for (const st of stmts) {
+      const n = st.match(/\('B\d'/g)!.length;
+      if (n > 1) expect(st.length).toBeLessThanOrEqual(8_000);
+    }
+    expect(stmts.some((st) => st.length > 8_000 && st.match(/\('B\d'/g)!.length === 1)).toBe(true);
+    expect(Math.max(...rows)).toBe(2);
+  });
 });
