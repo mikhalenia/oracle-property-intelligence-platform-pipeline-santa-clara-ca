@@ -193,7 +193,9 @@ describe("queries", () => {
       roofDate: "2006-06-15",
       roofAgeYears: 20,
       anchor: "final_date",
+      roofAgeBasisLabel: "final inspection date",
       confidence: "high",
+      roofAgeConfidenceLabel: "high confidence",
       permitNumber: "2006-002-RF",
     });
   });

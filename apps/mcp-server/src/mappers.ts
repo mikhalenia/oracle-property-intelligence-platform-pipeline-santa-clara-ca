@@ -103,6 +103,21 @@ export function toSnapshot(row: SnapshotRow | null) {
   };
 }
 
+const PERMIT_STATE_LABELS: Record<string, string> = {
+  open: "Open",
+  expired_unfinaled: "Stalled (expired without a final inspection)",
+  finaled: "Completed",
+};
+const ROOF_BASIS_LABELS: Record<string, string> = {
+  final_date: "final inspection date",
+  approval_complete_issue_date: "approval completed (issue date)",
+};
+const ROOF_CONFIDENCE_LABELS: Record<string, string> = {
+  high: "high confidence",
+  medium: "estimated",
+};
+const label = (map: Record<string, string>, v: string | null) => (v == null ? null : (map[v] ?? null));
+
 export function toLead(row: LeadRow, distanceMiles: number) {
   return {
     apn: row.apn,
@@ -115,10 +130,13 @@ export function toLead(row: LeadRow, distanceMiles: number) {
     roofDate: row.roof_date,
     roofAgeYears: row.roof_age_years,
     roofAgeAnchor: row.roof_age_anchor,
+    roofAgeBasisLabel: label(ROOF_BASIS_LABELS, row.roof_age_anchor),
     roofAgeConfidence: row.roof_age_confidence,
+    roofAgeConfidenceLabel: label(ROOF_CONFIDENCE_LABELS, row.roof_age_confidence),
     roofAgePermit: row.roof_age_permit,
     permitNumber: row.permit_number,
     permitState: row.permit_state,
+    permitStateLabel: label(PERMIT_STATE_LABELS, row.permit_state),
     approvalsComplete: row.approvals_complete === 1,
     daysOpen: row.days_open_now,
     issueDate: row.issue_date,
@@ -166,6 +184,7 @@ export function toPermit(row: PermitRow) {
     apn: row.apn,
     status: row.status,
     permitState: row.permit_state,
+    permitStateLabel: label(PERMIT_STATE_LABELS, row.permit_state),
     isRoofing: row.is_roofing === 1,
     workDescription: row.work_description,
     subtype: row.subtype,
@@ -190,7 +209,9 @@ export function toRoofAge(row: RoofAgeRow | null) {
     roofDate: row.roof_date,
     roofAgeYears: row.roof_age_years,
     anchor: row.anchor,
+    roofAgeBasisLabel: label(ROOF_BASIS_LABELS, row.anchor),
     confidence: row.confidence,
+    roofAgeConfidenceLabel: label(ROOF_CONFIDENCE_LABELS, row.confidence),
     permitNumber: row.permit_number,
   };
 }

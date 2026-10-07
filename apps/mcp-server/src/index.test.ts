@@ -53,8 +53,11 @@ describe("REST", () => {
       `/api/leads/open-permits?lat=${CENTER.lat}&lon=${CENTER.lon}&roofingOnly=false&minOpenYears=2`,
     );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { items: { permitState: string }[] };
+    const body = (await res.json()) as {
+      items: { permitState: string; permitStateLabel: string }[];
+    };
     expect(body.items.map((i) => i.permitState)).toEqual(["open"]);
+    expect(body.items.map((i) => i.permitStateLabel)).toEqual(["Open"]);
   });
 
   it("GET /api/properties/radius with invalid lat returns 400 with issues", async () => {
