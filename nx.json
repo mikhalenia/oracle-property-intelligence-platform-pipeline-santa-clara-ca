@@ -2,7 +2,7 @@
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
-    "sharedGlobals": []
+    "sharedGlobals": ["{workspaceRoot}/tsconfig.base.json", "{workspaceRoot}/eslint.config.mjs"]
   },
   "targetDefaults": {
     "build": {
@@ -16,6 +16,7 @@
       "cache": true
     },
     "typecheck": {
+      "inputs": ["default", "^default"],
       "cache": true
     }
   },

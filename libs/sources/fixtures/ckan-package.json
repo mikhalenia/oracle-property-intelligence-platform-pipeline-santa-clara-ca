@@ -1,0 +1,12 @@
+{
+  "result": {
+    "name": "active-building-permits",
+    "resources": [
+      {
+        "format": "CSV",
+        "last_modified": "2026-10-07T16:00:08.000000",
+        "url": "https://data.sanjoseca.gov/dataset/fd9ceb0c-75e0-402e-9fe3-3f6e04f2c23f/resource/761b7ae8-3be1-4ad6-923d-c7af6404a904/download/buildingpermitsactive.csv"
+      }
+    ]
+  }
+}
