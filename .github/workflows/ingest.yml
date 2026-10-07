@@ -2,6 +2,15 @@ name: ingest
 on:
   schedule: [{ cron: "30 0 * * *" }] # 00:30 UTC = 17:30 PT, after San José's 16:00 refresh
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Publish even when every source is unchanged (run --force)"
+        type: boolean
+        default: false
+      bootstrap:
+        description: "Skip the state preflight (first run: the sync marker and DuckDB file do not exist yet)"
+        type: boolean
+        default: false
 concurrency: ingest
 jobs:
   run:
@@ -22,10 +31,19 @@ jobs:
           path: |
             data
             !data/raw
-          key: pipeline-data-${{ github.run_id }}
+          key: pipeline-data-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: pipeline-data-
+      - name: Preflight pipeline state
+        if: ${{ !inputs.bootstrap }}
+        run: |
+          for f in data/d1-sync-state.json data/santa-clara.duckdb; do
+            if [ ! -f "$f" ]; then
+              echo "::error::missing $f: seed the Actions cache: run the pipeline once locally and upload data/ via actions/cache, or use workflow_dispatch input bootstrap=true"
+              exit 1
+            fi
+          done
       # Plain `run`: a day whose sources are all unchanged is not republished (`run --force` would).
-      - run: pnpm nx run pipeline:cli -- run
+      - run: pnpm nx run pipeline:cli -- run ${{ inputs.force && '--force' || '' }}
         env:
           FILEBASE_ACCESS_KEY: ${{ secrets.FILEBASE_ACCESS_KEY }}
           FILEBASE_SECRET_KEY: ${{ secrets.FILEBASE_SECRET_KEY }}
@@ -41,7 +59,7 @@ jobs:
           path: |
             data
             !data/raw
-          key: pipeline-data-${{ github.run_id }}
+          key: pipeline-data-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Commit run records
         if: always()
         run: |

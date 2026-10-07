@@ -164,6 +164,10 @@ pnpm check                           # lint, typecheck, test, build for every pr
 
 `ingest.yml` runs `pipeline run` daily and on `workflow_dispatch` (one run at a time, 90 minute timeout), caches `data/` (the DuckDB file and the D1 sync marker, not raw downloads) between runs, saves the cache and commits new `docs/runs/*.json` back to the repository even when a step fails, and does not republish a day whose sources are all unchanged. Repository secrets required: `FILEBASE_ACCESS_KEY`, `FILEBASE_SECRET_KEY`, `FILEBASE_BUCKET`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (the Cloudflare pair is used only by `sync`).
 
+Seeding the Actions cache (needed once, the workflow fails fast without it): run the pipeline locally so `data/santa-clara.duckdb` and `data/d1-sync-state.json` exist
+(`pipeline sync --bootstrap-state --run <id>` if D1 already holds that run), then upload `data/` (minus `data/raw`) under a `pipeline-data-` key via `actions/cache`.
+Alternatively start the first run with `workflow_dispatch` input `bootstrap=true`; the `force=true` input passes `--force` to `run`.
+
 ### Where the CIDs are
 
 Each run writes `docs/runs/<run_id>.json` with the run record, manifest CID, the manifest (every artifact: `cid`, `name`, `size`, `codec`, `sha256`) and verification results. Published CIDs are immutable and past records are not rewritten. Run `2026-10-07T17-10-54Z` (complete): manifest `bafybeidav5d5sigbbrvfhaexjxa6nqszyfmcpscyhqpnuv65hribw7y4jq`, snapshot root `bafybeict6ibbchgt3ymi7v4re7354kfvwnryuoqpa4bjfa3moicfeoswiu`. The live manifest is also at `/api/manifest`.
