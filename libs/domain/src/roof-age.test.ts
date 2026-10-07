@@ -19,4 +19,6 @@ describe("deriveRoofAge", () => {
   });
   it("floors partial years", () =>
     expect(deriveRoofAge({ isRoofing: true, approvals: "", issueDate: null, finalDate: "2011-10-09", asOf })?.roofAgeYears).toBe(14));
+  it("returns null when final date is after as-of", () =>
+    expect(deriveRoofAge({ isRoofing: true, approvals: "", issueDate: null, finalDate: "2027-01-01", asOf })).toBeNull());
 });

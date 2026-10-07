@@ -22,4 +22,6 @@ describe("daysOpen", () => {
     expect(daysOpen({ state: "expired_unfinaled", issueDate: "2016-10-08", finalDate: null, asOf })).toBe(3652));
   it("null without issue date", () =>
     expect(daysOpen({ state: "open", issueDate: null, finalDate: null, asOf })).toBeNull());
+  it("null when issue date is after as-of", () =>
+    expect(daysOpen({ state: "open", issueDate: "2026-12-01", finalDate: null, asOf })).toBeNull());
 });

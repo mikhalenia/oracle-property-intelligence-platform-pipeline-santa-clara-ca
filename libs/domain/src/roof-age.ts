@@ -24,6 +24,8 @@ export function deriveRoofAge(input: {
     anchor = "approval_complete_issue_date";
   }
   if (!roofDate) return null;
-  const years = Math.floor(daysBetween(roofDate, input.asOf) / 365.25);
+  const days = daysBetween(roofDate, input.asOf);
+  if (days < 0) return null;
+  const years = Math.floor(days / 365.25);
   return { roofDate, roofAgeYears: years, anchor, confidence: anchor === "final_date" ? "high" : "medium" };
 }

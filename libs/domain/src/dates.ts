@@ -7,7 +7,16 @@ export function parseUsDate(raw: string | null | undefined): string | null {
   const [, mm, dd, yyyy] = m;
   const month = Number(mm);
   const day = Number(dd);
+  const year = Number(yyyy);
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  // Validate calendar date by round-tripping through Date.UTC
+  const utcTime = Date.UTC(year, month - 1, day);
+  const utcDate = new Date(utcTime);
+  if (utcDate.getUTCFullYear() !== year || utcDate.getUTCMonth() !== month - 1 || utcDate.getUTCDate() !== day) {
+    return null;
+  }
+
   return `${yyyy}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 

@@ -9,4 +9,13 @@ describe("parseUsDate", () => {
     expect(parseUsDate(null)).toBeNull();
     expect(parseUsDate("not a date")).toBeNull();
   });
+  it("rejects impossible calendar dates", () => {
+    expect(parseUsDate("2/31/2026")).toBeNull();
+  });
+  it("accepts leap day on leap year", () => {
+    expect(parseUsDate("2/29/2024")).toBe("2024-02-29");
+  });
+  it("rejects Feb 29 on non-leap year", () => {
+    expect(parseUsDate("2/29/2023")).toBeNull();
+  });
 });

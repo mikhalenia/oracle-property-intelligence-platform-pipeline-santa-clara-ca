@@ -15,6 +15,11 @@ export function daysOpen(input: {
   asOf: string;
 }): number | null {
   if (!input.issueDate) return null;
-  if (input.state === "finaled") return input.finalDate ? daysBetween(input.issueDate, input.finalDate) : null;
-  return daysBetween(input.issueDate, input.asOf);
+  if (input.state === "finaled") {
+    if (!input.finalDate) return null;
+    const days = daysBetween(input.issueDate, input.finalDate);
+    return days < 0 ? null : days;
+  }
+  const days = daysBetween(input.issueDate, input.asOf);
+  return days < 0 ? null : days;
 }
