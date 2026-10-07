@@ -7,6 +7,12 @@
   "targets": {
     "typecheck": {
       "command": "tsc -p {projectRoot}/tsconfig.lib.json --noEmit"
+    },
+    "cli": {
+      "command": "tsx apps/pipeline/src/cli.ts",
+      "options": {
+        "cwd": "{workspaceRoot}"
+      }
     }
   }
 }

@@ -1,0 +1,104 @@
+[
+  {
+    "the_geom": {
+      "type": "MultiPolygon",
+      "coordinates": [
+        [
+          [
+            [-121.922227049211, 37.321948161679],
+            [-121.922226888412, 37.321934429916],
+            [-121.922225444819, 37.321810844644],
+            [-121.922689065338, 37.321807388479],
+            [-121.922690510727, 37.321930974471],
+            [-121.922690671525, 37.321944705521],
+            [-121.922227049211, 37.321948161679]
+          ]
+        ]
+      ]
+    },
+    "objectid": "484584",
+    "apn": "27715017",
+    "tax_rate_area": "58002",
+    "situs_house_number": "382",
+    "situs_street_name": "RICHMOND",
+    "situs_street_type": "AV",
+    "situs_city_name": "SAN JOSE",
+    "situs_state_code": "CA",
+    "situs_zip_code": "95128-2336",
+    "number_of_situs_address": "2",
+    "jurisdiction": "UNINCORPORATED",
+    "shape_length": "141.67019639243446",
+    "shape_area": "992.13081960893714"
+  },
+  {
+    "the_geom": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [-121.9, 37.3],
+          [-121.9, 37.31],
+          [-121.89, 37.31],
+          [-121.89, 37.3],
+          [-121.9, 37.3]
+        ]
+      ]
+    },
+    "objectid": "484585",
+    "apn": "259-34-037",
+    "tax_rate_area": "17001",
+    "situs_house_number": "100",
+    "situs_street_name": "N 13TH",
+    "situs_street_type": "ST",
+    "situs_city_name": "SAN JOSE",
+    "situs_state_code": "CA",
+    "situs_zip_code": "95112-3442",
+    "jurisdiction": "SAN JOSE",
+    "shape_length": "100.0",
+    "shape_area": "500.0"
+  },
+  {
+    "the_geom": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [-121.9, 37.3],
+          [-121.9, 37.31],
+          [-121.89, 37.31],
+          [-121.89, 37.3],
+          [-121.9, 37.3]
+        ]
+      ]
+    },
+    "objectid": "484586",
+    "apn": "467-15-052",
+    "tax_rate_area": "17002",
+    "situs_house_number": "100",
+    "situs_street_name": "N 13TH",
+    "situs_street_type": "ST",
+    "situs_city_name": "SAN JOSE",
+    "situs_state_code": "CA",
+    "situs_zip_code": "95112-3442",
+    "jurisdiction": "SAN JOSE",
+    "shape_length": "100.0",
+    "shape_area": "500.0"
+  },
+  {
+    "the_geom": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [-121.8, 37.2],
+          [-121.8, 37.21],
+          [-121.79, 37.21],
+          [-121.79, 37.2],
+          [-121.8, 37.2]
+        ]
+      ]
+    },
+    "objectid": "484586",
+    "apn": "",
+    "tax_rate_area": "17001",
+    "situs_city_name": "SAN JOSE",
+    "jurisdiction": "SAN JOSE"
+  }
+]
