@@ -10,6 +10,7 @@ export interface SourceStat {
   removed: number;
   sourceVersion: string | null;
   skipped: boolean;
+  skippedNoApn?: number;
   error?: string;
 }
 
@@ -34,7 +35,8 @@ export interface Verification {
     codec: string;
     size: number;
     results: VerificationResult[];
-    independentOk: boolean;
+    /** Number of independent gateways that served matching bytes. */
+    independentOk: number;
   }[];
 }
 

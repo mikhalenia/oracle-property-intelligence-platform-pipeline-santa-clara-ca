@@ -15,6 +15,7 @@ export function VerificationMatrix({ verification: v }: { verification: Verifica
             {v.gateways.map((g) => (
               <TableCell key={g}>{g}</TableCell>
             ))}
+            <TableCell>Independent OK</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -39,6 +40,7 @@ export function VerificationMatrix({ verification: v }: { verification: Verifica
                   </TableCell>
                 );
               })}
+              <TableCell>{`${a.independentOk}/${v.minIndependent}`}</TableCell>
             </TableRow>
           ))}
         </TableBody>

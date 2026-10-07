@@ -58,6 +58,44 @@ describe("ManifestPage", () => {
     expect(screen.getByText(/verification pending/i)).toBeInTheDocument();
   });
 
+  it("renders the verification matrix with independent-gateway counts from the run record", async () => {
+    vi.mocked(api.getManifest).mockResolvedValue({
+      runId: "r1",
+      manifestCid: "bafym",
+      manifestUrl: "https://x",
+      manifest,
+    });
+    vi.mocked(api.getRuns).mockResolvedValue([
+      {
+        runId: "r1",
+        verification: {
+          runId: "r1",
+          verifiedAt: "2026-10-07T19:00:00Z",
+          ok: true,
+          minIndependent: 2,
+          gateways: ["dweb.link", "ipfs.io"],
+          artifacts: [
+            {
+              cid: "bafyfile",
+              name: "verified-note.txt",
+              codec: "file",
+              size: 10,
+              independentOk: 2,
+              results: [
+                { gateway: "dweb.link", status: 200, bytes: 10, sha256Match: true, ms: 5 },
+                { gateway: "ipfs.io", status: 200, bytes: 10, sha256Match: true, ms: 6 },
+              ],
+            },
+          ],
+        },
+      } as never,
+    ]);
+    render(<ManifestPage />);
+    expect(await screen.findByText("verified-note.txt")).toBeInTheDocument();
+    expect(screen.getByText("2/2")).toBeInTheDocument();
+    expect(screen.queryByText(/verification pending/i)).not.toBeInTheDocument();
+  });
+
   it("shows pending/error text when manifest is null", async () => {
     vi.mocked(api.getManifest).mockResolvedValue({
       runId: "r1",
