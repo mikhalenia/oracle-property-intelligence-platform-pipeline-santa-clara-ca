@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import * as q from "./queries";
-import { CENTER, MANIFEST, MANIFEST_URL, seed } from "./test/seed";
+import { AS_OF, CENTER, DAYS_CENTER, MANIFEST, MANIFEST_URL, seed } from "./test/seed";
 
 const base = { ...CENTER, radiusMiles: 5, limit: 200 };
 
@@ -19,7 +19,7 @@ describe("queries", () => {
   });
 
   it("radius returns the two nearby properties sorted by distance", async () => {
-    const items = await q.radius(env.DB, base);
+    const items = await q.radius(env.DB, base, AS_OF);
     expect(items.map((i) => i.apn)).toEqual(["A-001", "B-002"]);
     expect(items[0]!.distanceMiles).toBeLessThan(items[1]!.distanceMiles);
     expect(items[1]!.distanceMiles).toBeLessThan(1);
@@ -41,14 +41,14 @@ describe("queries", () => {
 
   it("radius limits candidate parcels before joining permits and owners", async () => {
     const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN ${q.RADIUS_SQL}`)
-      .bind(37, 38, -122, -121, 37.33, -121.88, 0.63, 8)
+      .bind(37, 38, -122, -121, 37.33, -121.88, 0.63, 8, AS_OF)
       .all<{ detail: string }>();
     const plan = results.map((r) => r.detail).join("\n");
     expect(plan).toMatch(/CO-ROUTINE|MATERIALIZE/);
   });
 
   it("agedRoofs returns only roofs at least the minimum age", async () => {
-    const items = await q.agedRoofs(env.DB, { ...base, minRoofAgeYears: 15 });
+    const items = await q.agedRoofs(env.DB, { ...base, minRoofAgeYears: 15 }, AS_OF);
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({
       apn: "B-002",
@@ -60,14 +60,13 @@ describe("queries", () => {
   });
 
   it("openPermits(any, 2y) returns the open permit, never finaled", async () => {
-    const items = await q.openPermits(env.DB, {
-      ...base,
-      state: "any",
-      minOpenYears: 2,
-      roofingOnly: true,
-    });
+    const items = await q.openPermits(
+      env.DB,
+      { ...base, state: "any", minOpenYears: 2, roofingOnly: true },
+      AS_OF,
+    );
     expect(items).toHaveLength(1);
-    expect(items[0]!.daysOpen).toBeGreaterThanOrEqual(730);
+    expect(items[0]!.daysOpen).toBe(1096);
     expect(items[0]).toMatchObject({
       apn: "A-001",
       permitState: "open",
@@ -77,17 +76,60 @@ describe("queries", () => {
   });
 
   it("openPermits(expired_unfinaled) returns nothing", async () => {
-    const items = await q.openPermits(env.DB, {
-      ...base,
-      state: "expired_unfinaled",
-      minOpenYears: 0,
-      roofingOnly: true,
-    });
+    const items = await q.openPermits(
+      env.DB,
+      { ...base, state: "expired_unfinaled", minOpenYears: 0, roofingOnly: true },
+      AS_OF,
+    );
     expect(items).toEqual([]);
   });
 
+  describe("days open at query time", () => {
+    const dayBase = { ...DAYS_CENTER, radiusMiles: 5, limit: 200 };
+    const daysFor = (
+      items: { permitNumber: string | null; daysOpen: number | null }[],
+      n: string,
+    ) => items.find((i) => i.permitNumber === n)?.daysOpen;
+
+    it("computes open permits as asOf - issue_date and filters/sorts on it", async () => {
+      const items = await q.openPermits(
+        env.DB,
+        { ...dayBase, state: "any", minOpenYears: 2, roofingOnly: true },
+        AS_OF,
+      );
+      expect(items.map((i) => i.permitNumber)).toEqual(["D-PERMIT-OPEN"]);
+      expect(items[0]!.daysOpen).toBe(1095);
+      const later = await q.openPermits(
+        env.DB,
+        { ...dayBase, state: "any", minOpenYears: 2, roofingOnly: true },
+        "2026-10-08",
+      );
+      expect(later[0]!.daysOpen).toBe(1096);
+    });
+
+    it("keeps stored issue->final days for finaled permits regardless of asOf", async () => {
+      for (const asOf of [AS_OF, "2030-01-01"]) {
+        const items = await q.radius(env.DB, dayBase, asOf);
+        expect(daysFor(items, "D-PERMIT-FINALED")).toBe(60);
+      }
+    });
+
+    it("gives null for a missing issue_date and excludes it when minOpenYears > 0", async () => {
+      const items = await q.radius(env.DB, dayBase, AS_OF);
+      expect(daysFor(items, "D-PERMIT-NOISSUE")).toBeNull();
+      const open = await q.openPermits(
+        env.DB,
+        { ...dayBase, state: "any", minOpenYears: 0, roofingOnly: true },
+        AS_OF,
+      );
+      expect(open.map((i) => i.permitNumber)).toEqual(["D-PERMIT-OPEN", "D-PERMIT-NOISSUE"]);
+      const detail = await q.property(env.DB, "F-006", AS_OF);
+      expect(detail!.permits[0]!.daysOpen).toBeNull();
+    });
+  });
+
   it("property composes all sections", async () => {
-    const detail = await q.property(env.DB, "A-001");
+    const detail = await q.property(env.DB, "A-001", AS_OF);
     expect(detail).not.toBeNull();
     expect(detail!.snapshot.manifestCid).toBe("bafy-manifest");
     expect(detail!.property).toMatchObject({
@@ -127,7 +169,7 @@ describe("queries", () => {
   });
 
   it("contractor returns contractor with its permits", async () => {
-    const r = await q.contractor(env.DB, "acme-roofing");
+    const r = await q.contractor(env.DB, "acme-roofing", AS_OF);
     expect(r!.contractor).toMatchObject({ companyName: "ACME ROOFING INC", permitCount: 2 });
     expect(r!.permits.map((p) => p.permitNumber)).toEqual(["2023-001-RF", "2006-002-RF"]);
     expect(await q.contractor(env.DB, "nope")).toBeNull();

@@ -22,6 +22,18 @@ export { manifest, runs } from "./runs";
 
 const MAX_CANDIDATES = 2000;
 
+/**
+ * Days open, computed at query time: stored issue->final for finaled permits, otherwise
+ * `asOf - issue_date` (NULL without an issue_date). `asOfParam` is the bound ISO date placeholder.
+ */
+const daysOpenNow = (alias: string, asOfParam: string) =>
+  `CASE WHEN ${alias}.permit_state = 'finaled' THEN ${alias}.days_open ELSE CAST(julianday(${asOfParam}) - julianday(${alias}.issue_date) AS INTEGER) END`;
+
+/** Bound to ?9 in every spatial query. */
+const ASOF = "?9";
+
+const today = () => new Date().toISOString().slice(0, 10);
+
 /** Latest roofing permit per APN: open first, then newest issue_date, then permit_number. */
 const LATEST_ROOFING_PERMIT = `(SELECT x.permit_number FROM permits x WHERE x.apn = pr.apn AND x.is_roofing = 1
   ORDER BY (x.permit_state = 'open') DESC, x.issue_date DESC, x.permit_number LIMIT 1)`;
@@ -33,7 +45,7 @@ const LATEST_OWNER = `(SELECT y.permit_number FROM owners y WHERE y.apn = pr.apn
 const LEAD_COLUMNS = `pr.apn, pr.situs_address, pr.situs_city, pr.situs_zip, pr.jurisdiction, pr.lat, pr.lon,
   ra.roof_date, ra.roof_age_years, ra.anchor AS roof_age_anchor, ra.confidence AS roof_age_confidence,
   ra.permit_number AS roof_age_permit,
-  rp.permit_number, rp.permit_state, rp.days_open, rp.issue_date, rp.final_date, rp.work_description,
+  rp.permit_number, rp.permit_state, ${daysOpenNow("rp", ASOF)} AS days_open_now, rp.issue_date, rp.final_date, rp.work_description,
   rp.contractor_company, rp.contractor_id, c.cslb_license_number, c.cslb_status,
   o.owner_name, o.observed_on AS owner_observed_on,
   pr.source_url AS property_source_url, pr.source_version AS property_source_version,
@@ -84,6 +96,7 @@ async function spatialLeads(
   sql: string,
   extra: unknown[],
   sort: (a: Lead, b: Lead) => number,
+  asOf: string,
 ): Promise<Lead[]> {
   const box = boundingBox(p, p.radiusMiles);
   const cosLat = Math.cos((p.lat * Math.PI) / 180);
@@ -99,6 +112,7 @@ async function spatialLeads(
       p.lon,
       cosLat * cosLat,
       candidates,
+      asOf,
       ...extra,
     )
     .all<LeadRow>();
@@ -119,37 +133,40 @@ export async function snapshot(db: D1Database) {
   return toSnapshot(row);
 }
 
-export function radius(db: D1Database, p: RadiusParams): Promise<Lead[]> {
-  return spatialLeads(db, p, RADIUS_SQL, [], byDistance);
+export function radius(db: D1Database, p: RadiusParams, asOf = today()): Promise<Lead[]> {
+  return spatialLeads(db, p, RADIUS_SQL, [], byDistance, asOf);
 }
 
-export function agedRoofs(db: D1Database, p: AgedRoofsParams): Promise<Lead[]> {
+export function agedRoofs(db: D1Database, p: AgedRoofsParams, asOf = today()): Promise<Lead[]> {
   return spatialLeads(
     db,
     p,
-    spatialSql(LATEST_LEADS, `ra.roof_age_years DESC, ${NEAREST}`, "ra.roof_age_years >= ?9"),
+    spatialSql(LATEST_LEADS, `ra.roof_age_years DESC, ${NEAREST}`, "ra.roof_age_years >= ?10"),
     [p.minRoofAgeYears],
     (a, b) => (b.roofAgeYears ?? 0) - (a.roofAgeYears ?? 0) || byDistance(a, b),
+    asOf,
   );
 }
 
-export function openPermits(db: D1Database, p: OpenPermitsParams): Promise<Lead[]> {
+export function openPermits(db: D1Database, p: OpenPermitsParams, asOf = today()): Promise<Lead[]> {
+  const openDays = daysOpenNow("rp", ASOF);
   const states = p.state === "any" ? ["open", "expired_unfinaled"] : [p.state];
   const where = [
-    "rp.permit_state IN (?9, ?10)",
-    "COALESCE(rp.days_open, 0) >= ?11",
+    "rp.permit_state IN (?10, ?11)",
+    `COALESCE(${openDays}, 0) >= ?12`,
     ...(p.roofingOnly ? ["rp.is_roofing = 1"] : []),
   ].join(" AND ");
   return spatialLeads(
     db,
     p,
-    spatialSql(PERMIT_LEADS, `rp.days_open DESC, ${NEAREST}`, where),
+    spatialSql(PERMIT_LEADS, `${openDays} DESC, ${NEAREST}`, where),
     [states[0], states[1] ?? states[0], Math.ceil(p.minOpenYears * 365)],
     (a, b) => (b.daysOpen ?? 0) - (a.daysOpen ?? 0) || byDistance(a, b),
+    asOf,
   );
 }
 
-export async function property(db: D1Database, apn: string) {
+export async function property(db: D1Database, apn: string, asOf = today()) {
   const prop = await db
     .prepare(
       "SELECT apn, situs_address, situs_city, situs_zip, jurisdiction, lat, lon, source_url, source_version, fetched_at FROM properties WHERE apn = ?1",
@@ -160,8 +177,10 @@ export async function property(db: D1Database, apn: string) {
   const [snap, permits, roofAge, owners, contractors] = await Promise.all([
     snapshot(db),
     db
-      .prepare("SELECT * FROM permits WHERE apn = ?1 ORDER BY issue_date DESC, permit_number")
-      .bind(apn)
+      .prepare(
+        `SELECT p.*, ${daysOpenNow("p", "?2")} AS days_open_now FROM permits p WHERE p.apn = ?1 ORDER BY p.issue_date DESC, p.permit_number`,
+      )
+      .bind(apn, asOf)
       .all<PermitRow>(),
     db
       .prepare(
@@ -192,7 +211,7 @@ export async function property(db: D1Database, apn: string) {
   };
 }
 
-export async function contractor(db: D1Database, id: string) {
+export async function contractor(db: D1Database, id: string, asOf = today()) {
   const row = await db
     .prepare("SELECT * FROM contractors WHERE contractor_id = ?1")
     .bind(id)
@@ -202,9 +221,9 @@ export async function contractor(db: D1Database, id: string) {
     snapshot(db),
     db
       .prepare(
-        "SELECT * FROM permits WHERE contractor_id = ?1 ORDER BY issue_date DESC, permit_number",
+        `SELECT p.*, ${daysOpenNow("p", "?2")} AS days_open_now FROM permits p WHERE p.contractor_id = ?1 ORDER BY p.issue_date DESC, p.permit_number`,
       )
-      .bind(id)
+      .bind(id, asOf)
       .all<PermitRow>(),
   ]);
   return { snapshot: snap, contractor: toContractor(row), permits: permits.results.map(toPermit) };

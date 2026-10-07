@@ -7,6 +7,11 @@ export const MANIFEST_URL = "https://ipfs.filebase.io/ipfs/bafy-manifest";
 
 const PERMITS_URL = "https://data.sanjoseca.gov/permits";
 
+/** Fixed "now" for days-open assertions; the open fixture permit was issued 1,096 days earlier. */
+export const AS_OF = "2026-10-07";
+/** Far from CENTER so the days-open fixtures never join the other tests' results. */
+export const DAYS_CENTER = { lat: 37.9, lon: -121.5 };
+
 export async function seed(db: D1Database): Promise<void> {
   const prop = db.prepare(
     `INSERT INTO properties (apn, situs_address, situs_city, situs_zip, jurisdiction, lat, lon, source_url, source_version, fetched_at)
@@ -29,7 +34,7 @@ export async function seed(db: D1Database): Promise<void> {
       "Reroof",
       "2023-10-07",
       null,
-      1096,
+      null,
       "100 MAIN ST",
     ),
     permit.bind(
@@ -43,6 +48,21 @@ export async function seed(db: D1Database): Promise<void> {
       null,
       "200 MAIN ST",
     ),
+    // Days-open fixtures: open (issued 1,095 days before AS_OF, days_open NULL), finaled (stored 60),
+    // and no issue_date.
+    ...[
+      ["D-004", "D-PERMIT-OPEN", "open", "2023-10-08", null, null],
+      ["E-005", "D-PERMIT-FINALED", "finaled", "2020-01-01", "2020-03-01", 60],
+      ["F-006", "D-PERMIT-NOISSUE", "open", null, null, null],
+    ].flatMap(([apn, num, state, issue, fin, days], i) => [
+      prop.bind(apn, `${i + 1} DAYS ST`, DAYS_CENTER.lat + i * 0.001, DAYS_CENTER.lon),
+      db
+        .prepare(
+          `INSERT INTO permits (permit_number, apn, status, permit_state, is_roofing, issue_date, final_date, days_open, source_url, source_version, fetched_at)
+           VALUES (?1, ?2, 'x', ?3, 1, ?4, ?5, ?6, '${PERMITS_URL}', 'v-permits', '2026-10-07T16:00:00Z')`,
+        )
+        .bind(num, apn, state, issue, fin, days),
+    ]),
     db.prepare(
       `INSERT INTO roof_age (apn, roof_date, roof_age_years, anchor, confidence, permit_number, source_url, source_version, fetched_at)
        VALUES ('B-002', '2006-06-15', 20, 'final_date', 'high', '2006-002-RF', '${PERMITS_URL}', 'v-permits', '2026-10-07T16:00:00Z')`,

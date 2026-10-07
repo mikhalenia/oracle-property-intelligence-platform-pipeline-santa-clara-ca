@@ -17,7 +17,7 @@ export type LeadRow = Nullable<{
   roof_age_permit: string;
   permit_number: string;
   permit_state: string;
-  days_open: number;
+  days_open_now: number;
   issue_date: string;
   final_date: string;
   work_description: string;
@@ -59,6 +59,7 @@ export type PermitRow = Nullable<{
   issue_date: string;
   final_date: string;
   days_open: number;
+  days_open_now: number;
   valuation: number;
   address: string;
   contractor_company: string;
@@ -116,7 +117,7 @@ export function toLead(row: LeadRow, distanceMiles: number) {
     roofAgePermit: row.roof_age_permit,
     permitNumber: row.permit_number,
     permitState: row.permit_state,
-    daysOpen: row.days_open,
+    daysOpen: row.days_open_now,
     issueDate: row.issue_date,
     finalDate: row.final_date,
     workDescription: row.work_description,
@@ -168,7 +169,7 @@ export function toPermit(row: PermitRow) {
     approvals: row.approvals,
     issueDate: row.issue_date,
     finalDate: row.final_date,
-    daysOpen: row.days_open,
+    daysOpen: row.days_open_now,
     valuation: row.valuation,
     address: row.address,
     contractorCompany: row.contractor_company,
