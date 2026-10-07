@@ -100,4 +100,41 @@ describe("exportRun", () => {
     expect(runs.map((r: { runId: string }) => r.runId)).toEqual(["r2", "r1"]);
     await db.close();
   });
+
+  it("marks only expired permits without a Complete approval as stalled", async () => {
+    const db = await openDb(":memory:");
+    await applySchema(db);
+    await db.run(
+      "INSERT INTO runs VALUES ('r1','2026-10-08 00:00:00',NULL,'2026-10-08','complete','{\"runId\":\"r1\"}',NULL,NULL)",
+    );
+    const prop = (apn: string) =>
+      `('${apn}','1 Main','San Jose','95112','SAN JOSE',NULL,37.3,-121.8,'k','http://prop','pv1','2026-10-08 00:00:00','h','h','r1','r1','r1')`;
+    await db.run(`INSERT INTO properties VALUES ${["C3", "D4", "E5"].map(prop).join(",")}`);
+    const permit = (n: string, apn: string, state: string, approvals: string) =>
+      `('${n}','${apn}','s','${state}',true,'work',NULL,NULL,'${approvals}','2004-01-01',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'k','http://permit/${n}','pv','2026-10-08 00:00:00','h','h','r1','r1','r1')`;
+    await db.run(
+      `INSERT INTO permits VALUES ${[
+        permit("P-EXP-COMPLETE", "C3", "expired_unfinaled", "B-Complete"),
+        permit("P-EXP-STALLED", "D4", "expired_unfinaled", "B-Issued"),
+        permit("P-OPEN", "E5", "open", "B-Issued"),
+      ].join(",")}`,
+    );
+    const res = await exportRun(db, {
+      runId: "r1",
+      outDir: mkdtempSync(join(tmpdir(), "export-")),
+    });
+    const rows = await db.all<{
+      permit_number: string;
+      is_stalled: boolean;
+      approvals_complete: boolean;
+    }>(
+      `SELECT permit_number, is_stalled, approvals_complete FROM read_parquet('${join(res.dir, "leads.parquet")}') ORDER BY 1`,
+    );
+    expect(rows).toEqual([
+      { permit_number: "P-EXP-COMPLETE", is_stalled: false, approvals_complete: true },
+      { permit_number: "P-EXP-STALLED", is_stalled: true, approvals_complete: false },
+      { permit_number: "P-OPEN", is_stalled: false, approvals_complete: false },
+    ]);
+    await db.close();
+  });
 });

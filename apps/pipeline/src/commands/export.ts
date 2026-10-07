@@ -9,6 +9,9 @@ const leadsSql = (asOf: string): string => `
   SELECT p.apn, p.situs_address, p.situs_city, p.situs_zip, p.jurisdiction, p.lat, p.lon,
          r.roof_date, r.roof_age_years, r.anchor AS roof_age_anchor, r.confidence AS roof_age_confidence, r.permit_number AS roof_age_permit,
          lp.permit_number, lp.permit_state,
+         coalesce(lp.approvals, '') LIKE '%Complete%' AS approvals_complete,
+         -- stalled = expired without a final inspection and without a completed approval
+         lp.permit_state = 'expired_unfinaled' AND coalesce(lp.approvals, '') NOT LIKE '%Complete%' AS is_stalled,
          CASE WHEN lp.permit_state = 'finaled' THEN lp.days_open ELSE date_diff('day', lp.issue_date, DATE '${sqlString(asOf)}')::INTEGER END AS days_open, lp.issue_date, lp.final_date, lp.work_description, lp.contractor_company, lp.contractor_id,
          c.cslb_license_number, c.cslb_status, c.bbb_rating,
          o.owner_name, o.observed_on AS owner_observed_on,
