@@ -2,14 +2,16 @@
 
 Every bullet of the README "Acceptance Criteria" and every step of the "Demo Transcript", with a
 strict status and the evidence for it. Statuses: `met`, `partial`, `gap`. Figures are from run 2
-(`2026-10-07T17-10-54Z`, record in `docs/runs/2026-10-07T17-10-54Z.json`).
+(`2026-10-07T17-10-54Z`, record in `docs/runs/2026-10-07T17-10-54Z.json`); run 3 (`2026-10-07T18-31-50Z`) is the second published run.
 
 Shorthand used in the Evidence column:
 
 - `API` = `https://scc-pipeline-api.mikhalenia-a.workers.dev`
 - `EXPLORER` = `https://scc-explorer.mikhalenia-a.workers.dev`
 - `RUN2` = `docs/runs/2026-10-07T17-10-54Z.json`
-- Manifest CID `bafybeidav5d5sigbbrvfhaexjxa6nqszyfmcpscyhqpnuv65hribw7y4jq`; snapshot root `bafybeict6ibbchgt3ymi7v4re7354kfvwnryuoqpa4bjfa3moicfeoswiu`; CAR `bafybeic2s2oiuq5edcuj52e2lhgxmms442pk56fqtzg746c2oun5quo2b4`
+- `RUN3` = `docs/runs/2026-10-07T18-31-50Z.json` (forced incremental republish, every source `skipped: true`)
+- Run 3 manifest CID `bafybeihabollsxvyqj2vnhhhh6w3ouygh6pvhdjrg2nx4i5u63gjdlom64` (`previousManifestCid` = run 2's manifest CID); snapshot root `bafybeieaxkz56pcr2gf6ga75s7xu3zfp3djnhn745lrmk27i7rux64aw54`; CAR `bafybeidagvcg5n2vokbw5rkyyhqvwv6qatoxw2vz5aaom2v4uaxju5lx5u`
+- Run 2 manifest CID `bafybeidav5d5sigbbrvfhaexjxa6nqszyfmcpscyhqpnuv65hribw7y4jq`; snapshot root `bafybeict6ibbchgt3ymi7v4re7354kfvwnryuoqpa4bjfa3moicfeoswiu`; CAR `bafybeic2s2oiuq5edcuj52e2lhgxmms442pk56fqtzg746c2oun5quo2b4`
 
 ## Acceptance Criteria
 
@@ -30,11 +32,11 @@ Shorthand used in the Evidence column:
 | 11 | Capture roof age or best-available proxy, queryable by threshold (default 15 years) | partial | Roof age from roofing permits only: 7,151 roof-age rows for 494,841 parcels; 2,021 parcels at 15 years or more (`docs/limitations.md`); `roof_age.parquet`; `GET API/api/leads/aged-roofs?minRoofAgeYears=15`; no year built |
 | 12 | Reconcile duplicate entities across all uploaded datasets | partial | APN normalization, permit-number dedupe, contractor-name normalization (`libs/domain`; 8,920 contractors); 63,853 of 93,093 permits matched to a parcel by APN, the rest keep a null APN; no cross-dataset owner or business reconciliation |
 | 13 | Preserve source provenance for uploaded records | met | Every record carries `source_key`, `source_url`, `source_version`, `fetched_at`, `page_sha256`, `record_hash` (`docs/sources.md`); provenance in API responses (`GET API/api/properties/:apn`) |
-| 14 | Continuous/incremental design: ongoing ingestion, change detection, idempotent steps | partial | `record_hash` upsert with inserted/updated/unchanged/removed counts per source (`RUN2` `sources`); permit CSVs are downloaded and parsed every run and only the upsert is skipped when every file's `last_modified` is unchanged (`skipped: true`); departed permits are retained; `.github/workflows/ingest.yml` (daily 00:30 UTC and `workflow_dispatch`) running `pnpm nx run pipeline:cli -- run` (`apps/pipeline/src/commands/run.ts`). Not yet shown to detect a change: run 2 skipped every permit source and parcels were all inserts, so no changed record has been ingested; the scheduled workflow has not executed yet |
-| 15 | Visible history of runs (timestamps, sources, counts, deltas, limitations) | met | `GET API/api/runs` (runs 1 and 2); `EXPLORER` Runs page; `docs/runs/*.json`; `runs.json` artifact CID `bafkreifingna3clf26acxe3djo4mom5s7you4ans2ehfndn3gb2qgytr4a` |
-| 16 | Demonstrate data continues to be ingested and published over time | partial | Two runs exist (run 1 partial and unpublished, run 2 complete and published). Only one published manifest (`previousManifestCid: null`); a second published manifest is planned for the next scheduled run |
+| 14 | Continuous/incremental design: ongoing ingestion, change detection, idempotent steps | partial | `record_hash` upsert with inserted/updated/unchanged/removed counts per source (`RUN2` `sources`); permit CSVs are downloaded and parsed every run and only the upsert is skipped when every file's `last_modified` is unchanged (`skipped: true`); departed permits are retained; `.github/workflows/ingest.yml` (daily 00:30 UTC and `workflow_dispatch`) running `pnpm nx run pipeline:cli -- run` (`apps/pipeline/src/commands/run.ts`). Run 3 was a forced republish with every source unchanged (`skipped: true`, `RUN3` `sources`); no changed source record has been observed yet (sources unchanged today), so detection of changed records is untested on live data; the scheduled workflow has not executed yet |
+| 15 | Visible history of runs (timestamps, sources, counts, deltas, limitations) | met | `GET API/api/runs` (runs 1 to 3; records carry `manifest` and `verification`); `EXPLORER` Runs page; `docs/runs/*.json`; `runs.json` artifact CID `bafkreifingna3clf26acxe3djo4mom5s7you4ans2ehfndn3gb2qgytr4a` |
+| 16 | Demonstrate data continues to be ingested and published over time | met | Two published runs: run 2 (`2026-10-07T17-10-54Z`) and run 3 (`2026-10-07T18-31-50Z`, forced incremental republish), each with its own manifest (`RUN2`, `RUN3`); run 3 `manifest.previousManifestCid` = `bafybeidav5d5sigbbrvfhaexjxa6nqszyfmcpscyhqpnuv65hribw7y4jq`; `/api/health` reports run 3. Run 1 was partial and unpublished |
 | **Infrastructure and access** | | | |
-| 17 | Optimize pipeline performance where feasible | partial | 10,000-row Socrata pages; unchanged permit sources skipped by version; D1 sync is incremental (only changed rows; `sync --full` rewrites, `sync --bootstrap-state` adopts an existing D1 snapshot without writes, and an implicit full sync over an existing snapshot is refused) after the D1 free-tier write limit was hit on 2026-10-07 (`apps/pipeline/src/sync`); unchanged runs are not republished; the parcel read stays a full re-read (`docs/limitations.md`) |
+| 17 | Optimize pipeline performance where feasible | partial | 10,000-row Socrata pages; unchanged permit sources skipped by version; D1 sync is incremental (only changed rows; `sync --full` rewrites, `sync --bootstrap-state` adopts an existing D1 snapshot without writes, and an implicit full sync over an existing snapshot is refused) by design to stay within the free tier (100k row writes/day), which was hit on 2026-10-07; the account currently runs on Workers Paid (`apps/pipeline/src/sync`); run 3 wrote 3 rows incrementally; unchanged runs are not republished unless forced (run 3 was forced); the parcel read stays a full re-read (`docs/limitations.md`) |
 | 18 | Identify slow source sites or constrained data sources | met | `docs/limitations.md`, "Source speed and constraints"; `docs/sources.md` |
 | 19 | Document pipeline speed limitations and source constraints | met | `docs/limitations.md` (run 2 ingest 17:10:54Z to 17:15:02Z; 522/503 sources; gateway behaviour) |
 | 20 | Infrastructure with no ongoing Oracle cost by default | met | Cloudflare Workers, D1 and static assets, Filebase pinning, GitHub Actions; nothing always-on (`README.md` "Architecture"; design spec section 2) |
@@ -49,7 +51,7 @@ Shorthand used in the Evidence column:
 | 28 | Published bytes retrievable from the public IPFS network | met | Served by `gateway.pinata.cloud` and `ipfs.raribleuserdata.com` for every artifact (`RUN2` `verification`); pinned on Filebase |
 | 29 | Machine-readable manifest per run with cid, name, size, codec, digest (optional origins) | met | `RUN2` `manifest` (schema `scc-manifest/1`: `cid`, `name`, `path`, `size`, `codec`, `sha256`; no `origins`, which are optional); manifest CID above |
 | 30 | If IPNS is used, record the name and the resolved CID | n/a | Optional and not used: IPNS is not used by choice (`manifest.ipns: null`; `docs/limitations.md`, "IPNS"); the CID history is the pointer, so the condition does not apply |
-| 31 | On republish keep prior CIDs immutable; run history retains previous CIDs | partial | Mechanism: `previousManifestCid` in each manifest and `docs/runs/<run_id>.json` never rewritten. Only one published run so far, so no second CID exists yet |
+| 31 | On republish keep prior CIDs immutable; run history retains previous CIDs | met | Run 3 `manifest.previousManifestCid` = run 2's manifest CID `bafybeidav5d5sigbbrvfhaexjxa6nqszyfmcpscyhqpnuv65hribw7y4jq`; run 3 manifest CID `bafybeihabollsxvyqj2vnhhhh6w3ouygh6pvhdjrg2nx4i5u63gjdlom64` is new and run 2's still resolves (checked on gateway.pinata.cloud); `docs/runs/<run_id>.json` never rewritten; `/api/runs` records carry `manifest` and `verification`. Parquet artifacts `properties`, `owners` and `roof_age` keep identical CIDs in both manifests (content addressing); `leads` (gained `approvals_complete`, `is_stalled`; `days_open` computed as of the run date), `permits` and `contractors` changed |
 | 32 | CAR of the DAG for directory artifacts | met | CAR `bafybeic2s2oiuq5edcuj52e2lhgxmms442pk56fqtzg746c2oun5quo2b4`, 41,904,022 bytes, root = snapshot root (`RUN2` `manifest.car`) |
 | 33 | Each CID fetched from at least two independent public gateways, bytes match size/digest | met | `RUN2` `verification` (`ok: true`, `minIndependent: 2`, `sha256Match: true`): `gateway.pinata.cloud` and `ipfs.raribleuserdata.com` on all 11 objects (the latter runs on Filebase infrastructure; `docs/limitations.md`); `ipfs.ssi.eecc.de` intermittent. `ipfs.io` and `dweb.link` return 429/522 to non-browser clients (`docs/limitations.md`) |
 | 34 | Manifest (and CARs) in the repository or demo packet | partial | Manifest in `RUN2`. The CAR (42 MB) is not committed; it is fetchable by CID from the gateways above |
@@ -79,7 +81,7 @@ Shorthand used in the Evidence column:
 | T4 | Open the DuckDB-backed query layer | met | `EXPLORER` SQL page (DuckDB-WASM reads the Parquet by CID in the browser); no Oracle-hosted database |
 | T5 | Show the published artifact manifest | met | `GET API/api/manifest`; `EXPLORER` Manifest page; manifest CID above; no IPNS used |
 | T6 | Retrieve one artifact from a public gateway, then from a second independent one | met | `RUN2` `verification`; `gateway.pinata.cloud` and `ipfs.raribleuserdata.com`; commands in `docs/demo-script.md` step 5 |
-| T7 | Show a later incremental publish produced a new CID without mutating the previous one | partial | `previousManifestCid` and the scheduled workflow exist; only run 2 is published, so no second CID can be shown yet (planned for the next scheduled run) |
+| T7 | Show a later incremental publish produced a new CID without mutating the previous one | met | `RUN3` `manifest.previousManifestCid` = `bafybeidav5d5sigbbrvfhaexjxa6nqszyfmcpscyhqpnuv65hribw7y4jq` (run 2); new manifest CID `bafybeihabollsxvyqj2vnhhhh6w3ouygh6pvhdjrg2nx4i5u63gjdlom64`; `RUN2` unchanged and its manifest still resolves; `properties`, `owners`, `roof_age` Parquet CIDs identical across the two manifests, other artifacts changed |
 | T8 | UI: properties within a sample radius with roofs older than 15 years (roof-age basis, coordinates, provenance) | met | `EXPLORER/leads` (Leads page, downtown San José preset, 5 miles, 15 years); `GET API/api/leads/aged-roofs?lat=37.3382&lon=-121.8863&radiusMiles=5&minRoofAgeYears=15` (962 parcels in the dataset, up to 500 per response; anchor and confidence per row) |
 | T9 | UI: open roofing permits in the area, longest open first, with contractor and BBB where available | partial | `EXPLORER/leads` (permit table, longest open first); `GET API/api/leads/open-permits?lat=37.3382&lon=-121.8863&radiusMiles=5&state=any&minOpenYears=5`; contractor shown, BBB null |
 | T10 | Agent prompt: properties within five miles of [city] with roofs older than 15 years | met | Tool `find_aged_roofs` via `POST API/mcp` (`docs/demo-script.md` step 9); the agent session itself is not yet recorded |
@@ -93,9 +95,9 @@ optional and not used) and is not counted as met.
 
 | Section | met | partial | gap | n/a |
 |---|---|---|---|---|
-| Acceptance criteria (47) | 24 | 18 | 4 | 1 |
-| Demo transcript steps (12) | 7 | 5 | 0 | 0 |
-| Total (59) | 31 | 23 | 4 | 1 |
+| Acceptance criteria (47) | 26 | 16 | 4 | 1 |
+| Demo transcript steps (12) | 8 | 4 | 0 | 0 |
+| Total (59) | 34 | 20 | 4 | 1 |
 
 Gaps: BBB ratings (8), business records (9), ownership transfer over 10 years (39), regional or
 out-of-area owners (40). All four are documented in `docs/limitations.md`.

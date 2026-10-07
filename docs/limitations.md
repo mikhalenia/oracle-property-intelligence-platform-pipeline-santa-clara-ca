@@ -86,7 +86,7 @@ the last published run until the next publish.
 
 ## D1 sync safety
 
-A full D1 sync deletes every table and exceeds the free-tier write budget, so `sync` refuses an
+A full D1 sync deletes every table and exceeds the free-tier write budget (the design stays within 100k row writes/day; the account currently runs on Workers Paid), so `sync` refuses an
 implicit full sync when D1 already holds a snapshot. Without the local marker
 (`data/d1-sync-state.json`, cached by the workflow with the DuckDB file) the job fails and names
 the fix: `sync --bootstrap-state --run <D1 run id>` on a database whose newest run is the D1 run,

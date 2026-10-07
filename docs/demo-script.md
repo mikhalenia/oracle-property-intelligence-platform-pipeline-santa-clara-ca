@@ -9,14 +9,13 @@ EXPLORER=https://scc-explorer.mikhalenia-a.workers.dev
 ```
 
 Steps marked **[Explorer]** depend on the Explorer deploy. Each has a REST or file equivalent
-that works without it. Figures below are from run 2 (`2026-10-07T17-10-54Z`); a later scheduled
-run will show newer numbers.
+that works without it. Figures below are from run 2 (`2026-10-07T17-10-54Z`); run 3 (`2026-10-07T18-31-50Z`) has the same totals.
 
 ## 0. Introduction
 
-Say the presenter line from the transcript. Everything below is served from free tiers:
-Cloudflare Workers, D1 and static assets for access, Filebase plus the public IPFS network for storage,
-GitHub Actions for scheduling. Nothing is always-on.
+Say the presenter line from the transcript. Everything below is serverless and nothing is always-on: Cloudflare Workers, D1 and static assets for
+access, Filebase plus the public IPFS network for storage, GitHub Actions for scheduling. The design
+stays within the free tiers (D1: 100k row writes/day); the account currently runs on Workers Paid.
 
 ## 1. Pipeline run summary
 
@@ -57,8 +56,9 @@ GitHub Actions for scheduling. Nothing is always-on.
 
 ## 6. A later publish produces a new CID
 
-- `curl -s $API/api/runs | jq` and show both runs (run 1 is partial and was not published; run 2 is the first published run, so its manifest has `previousManifestCid: null`).
-- Show `docs/runs/*.json` in the repository: past records are never rewritten. Only run 2 has a record there; run 1 is visible via `/api/runs` and in the `runs.json` artifact inside the snapshot. The scheduled `ingest` workflow adds one record per run, and its manifest will carry a new CID and point to run 2's as `previousManifestCid`.
+- `curl -s $API/api/runs | jq` and show the runs (run 1 is partial and was not published; run 2 is the first published run, manifest `bafybeidav5d5sigbbrvfhaexjxa6nqszyfmcpscyhqpnuv65hribw7y4jq` with `previousManifestCid: null`; run 3 is the second, manifest `bafybeihabollsxvyqj2vnhhhh6w3ouygh6pvhdjrg2nx4i5u63gjdlom64`).
+- Show `docs/runs/*.json` in the repository: past records are never rewritten. Runs 2 and 3 have records there; run 1 is visible via `/api/runs` and in the `runs.json` artifact inside the snapshot.
+- Compare the manifests: run 3 (`bafybeihabollsxvyqj2vnhhhh6w3ouygh6pvhdjrg2nx4i5u63gjdlom64`, forced republish with unchanged sources) has `previousManifestCid` = run 2's `bafybeidav5d5sigbbrvfhaexjxa6nqszyfmcpscyhqpnuv65hribw7y4jq`. `properties`, `owners` and `roof_age` Parquet files have identical CIDs in both; `leads`, `permits`, `contractors` and the others changed. Run 2's manifest still resolves.
 - The snapshot root is a directory; its CAR is listed in the manifest.
 
 ## 7. Aged roofs in a radius (UI)
