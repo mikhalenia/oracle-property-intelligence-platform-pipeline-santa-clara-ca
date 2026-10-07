@@ -47,7 +47,7 @@ Roofing permits by state: expired_unfinaled 6,707, open 1,017, finaled 27.
 - Snapshot root CID (directory): `bafybeict6ibbchgt3ymi7v4re7354kfvwnryuoqpa4bjfa3moicfeoswiu`
 - CAR CID: `bafybeic2s2oiuq5edcuj52e2lhgxmms442pk56fqtzg746c2oun5quo2b4` (41,904,022 bytes)
 - Records: `docs/runs/<run_id>.json` holds the run record, manifest and verification results; the live manifest is at `/api/manifest`.
-- Every artifact in run 2 (10 files, the directory root and the CAR) was served with matching size and SHA-256 by two independent gateways, `gateway.pinata.cloud` and `ipfs.raribleuserdata.com`; `ipfs.ssi.eecc.de` was intermittent. `ipfs.io` and `dweb.link` answered 429 or 522 to non-browser clients, so verification did not use them.
+- Every artifact in run 2 (9 files, the directory root and the CAR: 11 objects) was served with matching size and SHA-256 by two independent gateways, `gateway.pinata.cloud` and `ipfs.raribleuserdata.com`; `ipfs.ssi.eecc.de` was intermittent. `ipfs.io` and `dweb.link` answered 429 or 522 to non-browser clients, so verification did not use them.
 - IPNS is not used; the CID history (`previousManifestCid`) is the pointer.
 
 ## Incremental ingestion
@@ -55,6 +55,7 @@ Roofing permits by state: expired_unfinaled 6,707, open 1,017, finaled 27.
 - `.github/workflows/ingest.yml` runs `pnpm nx run pipeline:cli -- run` daily at 00:30 UTC (after San José's 16:00 PT refresh) and on demand, caches the DuckDB file, and commits a new `docs/runs/*.json` per run.
 - Each run records per-source inserted/updated/unchanged/removed counts, source versions and limitations. Unchanged sources are skipped by version; row changes are found by `record_hash`. Parcel change detection is dataset-level only.
 - Republishing yields a new manifest CID that points to the previous one; earlier records are never rewritten.
+- The scheduled workflow has not executed yet; both runs so far were started by hand.
 - A second published manifest is planned for the next scheduled run; until then only run 2 is published (run 1 was partial).
 - D1 note: the D1 free-tier write limit was hit on 2026-10-07, so snapshot sync is being made incremental.
 
@@ -84,12 +85,14 @@ Full list: `docs/limitations.md`. Top 5:
 
 ## Acceptance criteria
 
-Traceability table with evidence: `docs/acceptance-criteria.md`. Of 59 rows (47 criteria and 12 demo steps): 35 met, 20 partial, 4 gap.
+Traceability table with evidence: `docs/acceptance-criteria.md`. Of 59 rows (47 criteria and 12 demo steps): 31 met, 23 partial, 4 gap, 1 n/a (IPNS, optional and not used).
 
 ## Kit usage
 
-- `oracle` / `use-oracle` conventions: CIDv1 artifacts, a UnixFS directory with a CAR, and a per-run JSON manifest.
-- `deploy-open-data-mcp`: the MCP server serves the synced accepted snapshot; tools never fetch remote archives per request.
-- `apply-engineering-guidelines`: baseline for TypeScript, tests and lint (`pnpm check`).
+No kit agent was run to build this. What follows is influence on the design, not tool usage.
+
+- Publication conventions (CIDv1, a CAR per snapshot, a manifest with cid/size/sha256, immutable republish) follow the Elephant oracle skills' publication model named in the assignment.
+- The MCP server serves an accepted snapshot synced into D1 and never fetches remote archives per request, the pattern described in the kit's `deploy-open-data-mcp` skill; see `apps/pipeline/src/sync` and `apps/mcp-server/src/queries.ts`.
+- Engineering baseline from the kit's `apply-engineering-guidelines`: TypeScript strict, nx, Vitest, GitHub Actions, Conventional Commits. The Cloudflare deviation is stated above.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

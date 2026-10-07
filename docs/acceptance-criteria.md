@@ -30,7 +30,7 @@ Shorthand used in the Evidence column:
 | 11 | Capture roof age or best-available proxy, queryable by threshold (default 15 years) | partial | Roof age from roofing permits only: 7,151 roof-age rows for 494,841 parcels; 2,021 parcels at 15 years or more (`docs/limitations.md`); `roof_age.parquet`; `GET API/api/leads/aged-roofs?minRoofAgeYears=15`; no year built |
 | 12 | Reconcile duplicate entities across all uploaded datasets | partial | APN normalization, permit-number dedupe, contractor-name normalization (`libs/domain`; 8,920 contractors); 63,853 of 93,093 permits matched to a parcel by APN, the rest keep a null APN; no cross-dataset owner or business reconciliation |
 | 13 | Preserve source provenance for uploaded records | met | Every record carries `source_key`, `source_url`, `source_version`, `fetched_at`, `page_sha256`, `record_hash` (`docs/sources.md`); provenance in API responses (`GET API/api/properties/:apn`) |
-| 14 | Continuous/incremental design: ongoing ingestion, change detection, idempotent steps | met | `record_hash` upsert with inserted/updated/unchanged/removed counts per source (`RUN2` `sources`); permit sources skipped when `sourceVersion` is unchanged (`skipped: true`); `.github/workflows/ingest.yml` (daily 00:30 UTC and `workflow_dispatch`) running `pnpm nx run pipeline:cli -- run` (`apps/pipeline/src/commands/run.ts`) |
+| 14 | Continuous/incremental design: ongoing ingestion, change detection, idempotent steps | partial | `record_hash` upsert with inserted/updated/unchanged/removed counts per source (`RUN2` `sources`); permit sources skipped when `sourceVersion` is unchanged (`skipped: true`); `.github/workflows/ingest.yml` (daily 00:30 UTC and `workflow_dispatch`) running `pnpm nx run pipeline:cli -- run` (`apps/pipeline/src/commands/run.ts`) |. Not yet shown to detect a change: run 2 skipped every permit source and parcels were all inserts, so no changed record has been ingested; the scheduled workflow has not executed yet
 | 15 | Visible history of runs (timestamps, sources, counts, deltas, limitations) | met | `GET API/api/runs` (runs 1 and 2); `EXPLORER` Runs page; `docs/runs/*.json`; `runs.json` artifact CID `bafkreifingna3clf26acxe3djo4mom5s7you4ans2ehfndn3gb2qgytr4a` |
 | 16 | Demonstrate data continues to be ingested and published over time | partial | Two runs exist (run 1 partial and unpublished, run 2 complete and published). Only one published manifest (`previousManifestCid: null`); a second published manifest is planned for the next scheduled run |
 | **Infrastructure and access** | | | |
@@ -48,7 +48,7 @@ Shorthand used in the Evidence column:
 | 27 | Prefer CIDv1 (base32) for every published object | met | All 11 manifest CIDs and the manifest CID start with `bafy`/`bafk` (`RUN2` `manifest.artifacts`, `manifest.car`) |
 | 28 | Published bytes retrievable from the public IPFS network | met | Served by `gateway.pinata.cloud` and `ipfs.raribleuserdata.com` for every artifact (`RUN2` `verification`); pinned on Filebase |
 | 29 | Machine-readable manifest per run with cid, name, size, codec, digest (optional origins) | met | `RUN2` `manifest` (schema `scc-manifest/1`: `cid`, `name`, `path`, `size`, `codec`, `sha256`; no `origins`, which are optional); manifest CID above |
-| 30 | If IPNS is used, record the name and the resolved CID | met | IPNS not used by choice (`manifest.ipns: null`; `docs/limitations.md`, "IPNS"); the CID history is the pointer, so the condition does not apply |
+| 30 | If IPNS is used, record the name and the resolved CID | n/a | Optional and not used: IPNS is not used by choice (`manifest.ipns: null`; `docs/limitations.md`, "IPNS"); the CID history is the pointer, so the condition does not apply
 | 31 | On republish keep prior CIDs immutable; run history retains previous CIDs | partial | Mechanism: `previousManifestCid` in each manifest and `docs/runs/<run_id>.json` never rewritten. Only one published run so far, so no second CID exists yet |
 | 32 | CAR of the DAG for directory artifacts | met | CAR `bafybeic2s2oiuq5edcuj52e2lhgxmms442pk56fqtzg746c2oun5quo2b4`, 41,904,022 bytes, root = snapshot root (`RUN2` `manifest.car`) |
 | 33 | Each CID fetched from at least two independent public gateways, bytes match size/digest | met | `RUN2` `verification` (`ok: true`, `minIndependent: 2`, `sha256Match: true`): `gateway.pinata.cloud` and `ipfs.raribleuserdata.com` on all 11 objects; `ipfs.ssi.eecc.de` intermittent. `ipfs.io` and `dweb.link` return 429/522 to non-browser clients (`docs/limitations.md`) |
@@ -62,9 +62,9 @@ Shorthand used in the Evidence column:
 | 40 | Properties with regional or out-of-area owners | gap | No owner mailing address available; `docs/limitations.md` first row |
 | 41 | Return source-backed answers where source data is available | met | Every API/MCP response includes the snapshot (`manifest_cid`) and per-record provenance (`docs/demo-script.md` step 10) |
 | **Demonstration** | | | |
-| 42 | Demonstrate the dataset through the UI | met | `EXPLORER`; click path in `docs/demo-script.md` steps 1-8. The recorded demo video is pending |
+| 42 | Demonstrate the dataset through the UI | partial | `EXPLORER`; click path in `docs/demo-script.md` steps 1-8. Partial until the recorded demo video exists |
 | 43 | Demonstrate the dataset through an agent query for roofing lead discovery | partial | `POST API/mcp` tools `find_aged_roofs`, `find_open_roofing_permits` and the prompts in `docs/demo-script.md` step 9; no recorded agent session yet |
-| 44 | Demonstrate Oracle can operate without carrying infrastructure cost | met | Serverless-only architecture (`README.md`); `.github/workflows/ingest.yml` schedule; design spec section 2 |
+| 44 | Demonstrate Oracle can operate without carrying infrastructure cost | partial | Serverless-only architecture (`README.md`); `.github/workflows/ingest.yml` schedule; design spec section 2 |. Partial until the demo video exists
 | 45 | Demonstrate public CID-addressed publication with manifest and independent gateway retrieval | met | `API/api/manifest`; `RUN2` `verification`; `docs/demo-script.md` step 5 |
 | 46 | Confirm the candidate fulfilled both Oracle and builder responsibilities | partial | Pipeline, publication, scheduling and access are built and live; the explicit statement is for the demo video, which is pending |
 | 47 | Pass the demo using real uploaded Santa Clara County records | partial | Real records (494,841 County parcels, 93,093 San José permits) are live; the demo recording is pending and coverage gaps above apply |
@@ -88,13 +88,14 @@ Shorthand used in the Evidence column:
 
 ## Counts
 
-Over the 47 acceptance criteria plus the 12 transcript steps (59 rows):
+Statuses `met`, `partial`, `gap`; `n/a` marks the one criterion that does not apply (row 30, IPNS is
+optional and not used) and is not counted as met.
 
-| Section | met | partial | gap |
-|---|---|---|---|
-| Acceptance criteria (47) | 28 | 15 | 4 |
-| Demo transcript steps (12) | 7 | 5 | 0 |
-| Total (59) | 35 | 20 | 4 |
+| Section | met | partial | gap | n/a |
+|---|---|---|---|---|
+| Acceptance criteria (47) | 24 | 18 | 4 | 1 |
+| Demo transcript steps (12) | 7 | 5 | 0 | 0 |
+| Total (59) | 31 | 23 | 4 | 1 |
 
 Gaps: BBB ratings (8), business records (9), ownership transfer over 10 years (39), regional or
 out-of-area owners (40). All four are documented in `docs/limitations.md`.
