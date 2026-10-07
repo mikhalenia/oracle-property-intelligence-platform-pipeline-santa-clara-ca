@@ -63,7 +63,7 @@ Two published runs, chained by `previousManifestCid` (run 1 was partial and not 
 - Each run records per-source inserted/updated/unchanged/removed counts, source versions and limitations. Unchanged sources are skipped by version; row changes are found by `record_hash`. Parcel change detection is dataset-level only.
 - Republishing yields a new manifest CID that points to the previous one; earlier records are never rewritten.
 - The scheduled workflow has not executed yet; all runs so far were started by hand. Run 3 was a forced republish (`--force`) with unchanged sources, so no changed source record has been observed yet; the live `/api/health` reports run 3 and `/api/runs` records carry `manifest` and `verification`.
-- D1 sync is incremental: `sync` writes only changed rows (designed to stay within the free tier (100k row writes/day), which was hit on 2026-10-07; the account currently runs on Workers Paid; run 3's incremental sync wrote 3 rows), `sync --full` rewrites everything, and `sync --bootstrap-state --run <id>` adopts an existing D1 snapshot without writes. An implicit full sync over an existing D1 snapshot is refused, so a lost cache fails the job instead of wiping D1.
+- D1 sync is incremental: `sync` writes only changed rows (within the free-tier write budget of 100k rows/day; run 3's incremental sync wrote 3 rows), `sync --full` rewrites everything, and `sync --bootstrap-state --run <id>` adopts an existing D1 snapshot without writes. An implicit full sync over an existing D1 snapshot is refused, so a lost cache fails the job instead of wiping D1.
 - A run whose sources were all unchanged is not republished (`run --force` overrides); each publish stores about 84 MB.
 
 ## Architecture
