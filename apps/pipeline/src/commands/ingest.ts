@@ -16,7 +16,13 @@ import { deriveAll } from "../db/derive";
 import type { Db } from "../db/duck";
 import { upsertTable, type Delta } from "../db/upsert";
 
-export type SourceStat = Delta & { sourceVersion: string; skipped: boolean; error?: string };
+export type SourceStat = Delta & {
+  sourceVersion: string;
+  skipped: boolean;
+  error?: string;
+  /** Parcels only: source rows without an APN, which are not loaded. */
+  skippedNoApn?: number;
+};
 export type RunRecord = {
   runId: string;
   startedAt: string;
@@ -76,11 +82,13 @@ export async function ingest(opts: {
     } else {
       const staging = join(rawDir, "parcels.ndjson");
       await writeFile(staging, "");
+      let skippedNoApn = 0;
       for await (const page of fetchParcelPages(fetcher, {
         outDir: join(rawDir, PARCELS_SOURCE_KEY),
         sourceVersion: version,
         fetchedAt: now,
       })) {
+        skippedNoApn += page.skippedNoApn;
         await appendFile(
           staging,
           page.rows.map((r) => JSON.stringify(toSnake(r))).join("\n") + "\n",
@@ -93,7 +101,12 @@ export async function ingest(opts: {
         runId,
         fullSource: true,
       });
-      sources[PARCELS_SOURCE_KEY] = { ...delta, sourceVersion: version, skipped: false };
+      sources[PARCELS_SOURCE_KEY] = {
+        ...delta,
+        sourceVersion: version,
+        skipped: false,
+        skippedNoApn,
+      };
     }
   } catch (err) {
     status = "partial";
@@ -137,14 +150,16 @@ export async function ingest(opts: {
       limitations.push(`${sourceKey} failed: ${String(err)}`);
     }
   }
-  // a missing file would make the full reload delete its permits, so only reload when all three arrived
+  // Only reload when all three files arrived, so a failed file cannot regress a permit's status.
+  // Never delete: finaled permits drop out of all three feeds but remain roof-age evidence, so a
+  // departed permit keeps its last observed state and `last_seen_run`.
   if (anyPermitChange && !anyPermitFailed) {
     const delta = await upsertTable(db, {
       table: "permits",
       stagingNdjsonPath: staging,
       key: "permit_number",
       runId,
-      fullSource: true,
+      fullSource: false,
     });
     // attribute deltas to the combined feed; per-file counts stay in `fetched`
     sources["sj-permits"] = {

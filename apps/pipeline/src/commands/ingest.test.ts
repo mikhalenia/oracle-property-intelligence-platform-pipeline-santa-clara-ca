@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -23,7 +23,12 @@ describe("ingest", () => {
       now: "2026-10-08T01:00:00Z",
     });
     expect(r1.status).toBe("complete");
-    expect(r1.sources["scc-parcels"]).toMatchObject({ inserted: 3, removed: 0, skipped: false });
+    expect(r1.sources["scc-parcels"]).toMatchObject({
+      inserted: 3,
+      removed: 0,
+      skipped: false,
+      skippedNoApn: 1,
+    });
     expect(r1.sources["sj-permits-active"]).toMatchObject({
       fetched: 4,
       skipped: false,
@@ -92,6 +97,57 @@ describe("ingest", () => {
     expect(r3.status).toBe("complete");
     expect(r3.previousRunId).toBe("r2");
     expect((await db.all<{ n: number }>("SELECT count(*)::INT AS n FROM runs"))[0]?.n).toBe(3);
+    await db.close();
+  });
+
+  it("keeps permits that leave every status feed, with their last state and last_seen_run", async () => {
+    const db = await openDb(":memory:");
+    await applySchema(db);
+    const dataDir = mkdtempSync(join(tmpdir(), "ingest-"));
+    await ingest({
+      db,
+      fetcher: fixtureFetcher(fx("day1")),
+      dataDir,
+      runId: "r1",
+      asOf: "2026-10-08",
+      now: "2026-10-08T01:00:00Z",
+    });
+    const day1Expired = await db.all<{ permit_number: string }>(
+      "SELECT permit_number FROM permits WHERE status = 'expired' ORDER BY 1",
+    );
+    expect(day1Expired.length).toBeGreaterThan(0);
+    const day2 = fixtureFetcher(fx("day2"));
+    // the expired feed drops every row (header only), as a finaled permit drops out of the feeds
+    const header = readFileSync(join(fx("day2"), "expired.csv"), "utf8").split("\n")[0] + "\n";
+    const fetcher: typeof day2 = async (url, init) =>
+      String(url).includes("buildingpermitsexpired") ? new Response(header) : day2(url, init);
+    const r2 = await ingest({
+      db,
+      fetcher,
+      dataDir,
+      runId: "r2",
+      asOf: "2026-10-09",
+      now: "2026-10-09T01:00:00Z",
+    });
+    expect(r2.sources["sj-permits"]).toMatchObject({ removed: 0 });
+    const kept = await db.all<{ permit_number: string; status: string; last_seen_run: string }>(
+      `SELECT permit_number, status, last_seen_run FROM permits
+       WHERE permit_number IN (${day1Expired.map((p) => `'${p.permit_number}'`).join(", ")}) ORDER BY 1`,
+    );
+    expect(kept).toEqual(
+      day1Expired.map((p) => ({
+        permit_number: p.permit_number,
+        status: "expired",
+        last_seen_run: "r1",
+      })),
+    );
+    expect(
+      (
+        await db.all<{ n: number }>(
+          "SELECT count(*)::INT AS n FROM removed_keys WHERE \"table\" = 'permits'",
+        )
+      )[0]?.n,
+    ).toBe(0);
     await db.close();
   });
 

@@ -230,6 +230,9 @@ describe("buildD1Statements", () => {
     // refetch only: provenance volatility must not trigger a rewrite
     await db.run("UPDATE permits SET fetched_at='2026-10-09 00:00:00', source_version='v2'");
     expect(await run()).not.toContain("INTO permits");
+    // days_open is computed by the Worker at query time: a stored-value change must not rewrite rows
+    await db.run("UPDATE permits SET days_open = coalesce(days_open, 0) + 17");
+    expect(await run()).not.toContain("INTO permits");
     // computed column only (not covered by record_hash, last_changed_run unchanged)
     await db.run("UPDATE permits SET contractor_id='c2' WHERE permit_number='P1'");
     const all = await run();

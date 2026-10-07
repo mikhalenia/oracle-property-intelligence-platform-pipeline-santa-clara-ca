@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { applySchema, openDb } from "../db/duck";
 import { chooseMode, readSyncState, writeSyncState } from "../sync/state";
-import { bootstrapSyncState, planSync, sync } from "./sync";
+import { bootstrapSyncState, parseD1SnapshotRunId, planSync, sync } from "./sync";
 
 describe("sync", () => {
   it("writes numbered files and execs them sequentially", async () => {
@@ -77,6 +77,7 @@ describe("sync", () => {
   });
 
   describe("planSync", () => {
+    const d1 = (runId: string | null) => async () => runId;
     async function setup(marker: string | null) {
       const db = await openDb(":memory:");
       await applySchema(db);
@@ -102,7 +103,13 @@ describe("sync", () => {
       await db.run(
         "INSERT INTO properties VALUES ('A1','x','y','z','j','t',1,2,'k','u','v','2026-10-01 00:00:00','h','h','r2','r2','r2')",
       );
-      const plan = await planSync({ db, dataDir, runId: "r2", full: false });
+      const plan = await planSync({
+        db,
+        dataDir,
+        runId: "r2",
+        full: false,
+        d1SnapshotRunId: d1("r2"),
+      });
       expect(plan).toEqual({ mode: "incremental", changedRunIds: [], alreadySyncedRun: "r2" });
       const res = await sync({
         db,
@@ -126,20 +133,60 @@ describe("sync", () => {
 
     it("older marker is incremental over the runs since", async () => {
       const { db, dataDir } = await setup("r1");
-      expect(await planSync({ db, dataDir, runId: "r3", full: false })).toEqual({
+      expect(
+        await planSync({ db, dataDir, runId: "r3", full: false, d1SnapshotRunId: d1("r1") }),
+      ).toEqual({
         mode: "incremental",
         changedRunIds: ["r2", "r3"],
       });
       await db.close();
     });
 
-    it("no marker or --full is full", async () => {
+    it("no marker and an empty D1 is full; --full is full even when D1 holds a snapshot", async () => {
       const a = await setup(null);
-      expect((await planSync({ ...a, runId: "r2", full: false })).mode).toBe("full");
+      expect(
+        (await planSync({ ...a, runId: "r2", full: false, d1SnapshotRunId: d1(null) })).mode,
+      ).toBe("full");
       const b = await setup("r1");
-      expect((await planSync({ ...b, runId: "r2", full: true })).mode).toBe("full");
+      expect(
+        (await planSync({ ...b, runId: "r2", full: true, d1SnapshotRunId: d1("r1") })).mode,
+      ).toBe("full");
       await a.db.close();
       await b.db.close();
+    });
+
+    it("refuses an implicit full sync when D1 already holds a snapshot and names the bootstrap command", async () => {
+      const a = await setup(null);
+      await expect(
+        planSync({ ...a, runId: "r2", full: false, d1SnapshotRunId: d1("r1") }),
+      ).rejects.toThrow("sync --bootstrap-state --run r1");
+      // empty derived state with a marker would also fall back to full: refused too
+      const b = await setup("r1");
+      await b.db.run("DELETE FROM derived_sync_state");
+      await expect(
+        planSync({ ...b, runId: "r2", full: false, d1SnapshotRunId: d1("r1") }),
+      ).rejects.toThrow(/refusing a full D1 sync/);
+      await a.db.close();
+      await b.db.close();
+    });
+
+    it("refuses incremental when D1 holds a different run than the local marker", async () => {
+      const { db, dataDir } = await setup("r1");
+      await expect(
+        planSync({ db, dataDir, runId: "r3", full: false, d1SnapshotRunId: d1("r2") }),
+      ).rejects.toThrow(/D1 holds run r2 but the local sync marker says r1/);
+      await db.close();
+    });
+  });
+
+  describe("parseD1SnapshotRunId", () => {
+    it("reads the run id from wrangler --json output", () => {
+      expect(parseD1SnapshotRunId('[{"results":[{"run_id":"r9"}],"success":true,"meta":{}}]')).toBe(
+        "r9",
+      );
+      expect(parseD1SnapshotRunId('banner\n[{"results":[{"run_id":"r8"}]}]\n')).toBe("r8");
+      expect(parseD1SnapshotRunId('[{"results":[],"success":true,"meta":{}}]')).toBeNull();
+      expect(() => parseD1SnapshotRunId("not json")).toThrow(/unexpected wrangler output/);
     });
   });
 });

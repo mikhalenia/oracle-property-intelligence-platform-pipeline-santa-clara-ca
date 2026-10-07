@@ -139,7 +139,17 @@ const isHashed = (t: D1Table): t is HashedTable => (HASHED as readonly string[])
 
 const rowKey = (t: D1Table, r: Record<string, unknown>): string =>
   PK[t].map((c) => String(r[c])).join("|");
-const rowHash = (t: D1Table, r: Record<string, unknown>): string => hashRow(D1_COLUMNS[t], r);
+/**
+ * Columns left out of a table's row hash. `days_open` is recomputed daily for open permits and the
+ * Worker computes it at query time; for finaled permits a state change already alters
+ * `permit_state`/`final_date`. Hashing it would rewrite every open permit on every sync.
+ */
+const UNHASHED: Partial<Record<D1Table, readonly string[]>> = { permits: ["days_open"] };
+const rowHash = (t: D1Table, r: Record<string, unknown>): string =>
+  hashRow(
+    (D1_COLUMNS[t] as readonly string[]).filter((c) => !UNHASHED[t]?.includes(c)),
+    r,
+  );
 
 /** Reads a table (optionally filtered) in key order, in pages. */
 async function* readTable(

@@ -8,7 +8,7 @@ import { exportRun } from "./commands/export";
 import { ingest } from "./commands/ingest";
 import { publish } from "./commands/publish";
 import { runPipeline } from "./commands/run";
-import { bootstrapSyncState, planSync, sync } from "./commands/sync";
+import { bootstrapSyncState, parseD1SnapshotRunId, planSync, sync } from "./commands/sync";
 import { clearSyncState, writeSyncState } from "./sync/state";
 import { commitDerivedState } from "./sync/sql";
 import { verifyManifest } from "./commands/verify";
@@ -127,18 +127,26 @@ async function bootstrapStep(runId?: string): Promise<void> {
 
 async function syncStep(runId?: string, forceFull = false): Promise<void> {
   const cwd = join(repoRoot, "apps/mcp-server");
-  const wrangler = async (args: string[]): Promise<void> => {
+  const wrangler = async (args: string[]): Promise<string> => {
     try {
-      await promisify(execFile)("npx", ["wrangler", ...args], {
+      const { stdout } = await promisify(execFile)("npx", ["wrangler", ...args], {
         cwd,
         maxBuffer: 64 * 1024 * 1024,
       });
+      return stdout;
     } catch (err) {
       const e = err as { stderr?: string; message: string };
       throw new Error(`wrangler ${args.join(" ")} failed: ${e.stderr || e.message}`, {
         cause: err,
       });
     }
+  };
+  let migrated = false;
+  const migrate = async (): Promise<void> => {
+    if (migrated) return;
+    console.log("applying D1 migrations");
+    await wrangler(["d1", "migrations", "apply", "scc-snapshot", "--remote"]);
+    migrated = true;
   };
   await withDb(async (db) => {
     const latest = await resolveRun(db, runId);
@@ -149,13 +157,26 @@ async function syncStep(runId?: string, forceFull = false): Promise<void> {
       dataDir,
       runId: latest.run_id,
       full: forceFull,
+      d1SnapshotRunId: async () => {
+        await migrate();
+        return parseD1SnapshotRunId(
+          await wrangler([
+            "d1",
+            "execute",
+            "scc-snapshot",
+            "--remote",
+            "--json",
+            "--command",
+            "SELECT run_id FROM snapshot WHERE id = 1",
+          ]),
+        );
+      },
     });
     const { mode, changedRunIds } = plan;
     console.log(`D1 sync mode: ${mode}`);
     if (plan.alreadySyncedRun)
       console.log(`nothing changed since ${plan.alreadySyncedRun}; pushing hash diffs only`);
     if (mode === "full") await clearSyncState(dataDir);
-    let migrated = false;
     const res = await sync({
       db,
       runId: latest.run_id,
@@ -164,11 +185,7 @@ async function syncStep(runId?: string, forceFull = false): Promise<void> {
       changedRunIds,
       outDir: exportDirOf(),
       exec: async (file) => {
-        if (!migrated) {
-          console.log("applying D1 migrations");
-          await wrangler(["d1", "migrations", "apply", "scc-snapshot", "--remote"]);
-          migrated = true;
-        }
+        await migrate();
         console.log(`executing ${file}`);
         await wrangler([
           "d1",

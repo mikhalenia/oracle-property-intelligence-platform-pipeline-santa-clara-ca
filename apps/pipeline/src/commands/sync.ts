@@ -71,17 +71,36 @@ export async function bootstrapSyncState(opts: {
   return { runId, stateRows };
 }
 
+/** Run id in D1's `snapshot` row, from `wrangler d1 execute --json` output (null when empty). */
+export function parseD1SnapshotRunId(stdout: string): string | null {
+  try {
+    // tolerate banner lines around the JSON array
+    const json = stdout.slice(stdout.indexOf("["), stdout.lastIndexOf("]") + 1);
+    const out = JSON.parse(json) as Array<{ results?: Array<{ run_id?: unknown }> }>;
+    const runId = out[0]?.results?.[0]?.run_id;
+    return typeof runId === "string" ? runId : null;
+  } catch (err) {
+    throw new Error(`unexpected wrangler output: ${stdout.slice(0, 200)}`, { cause: err });
+  }
+}
+
 /**
  * Picks the sync mode for `runId`. Incremental needs the marker from a previous successful sync, a
  * populated derived_sync_state, and a marker run that is not newer than the target. When the marker
- * run IS the target (re-sync), nothing is pushed except the runs/snapshot upserts. Syncs that predate
- * the marker (no marker, empty state) fall back to full; `full: true` is the only other full path.
+ * run IS the target (re-sync), nothing is pushed except the runs/snapshot upserts.
+ *
+ * A full sync starts by deleting every D1 table and exceeds the daily write budget, so an implicit
+ * full sync (no `full: true`) is REFUSED when D1 already holds a snapshot: the operator either
+ * bootstraps the local state from that snapshot or passes `--full` deliberately. Incremental is
+ * refused when D1 holds a different run than the local marker (the diff would be against the wrong base).
  */
 export async function planSync(opts: {
   db: Db;
   dataDir: string;
   runId: string;
   full: boolean;
+  /** Probe for the run id in D1's snapshot row (null when D1 has none). */
+  d1SnapshotRunId: () => Promise<string | null>;
 }): Promise<{ mode: SyncMode; changedRunIds: string[]; alreadySyncedRun?: string }> {
   const state = await readSyncState(opts.dataDir);
   const derivedStateRows = Number(
@@ -101,6 +120,25 @@ export async function planSync(opts: {
     known = changedRunIds.length > 0;
   }
   const mode = chooseMode({ full: opts.full, derivedStateRows, lastSyncedRunKnown: known }, state);
+  if (!opts.full) {
+    const d1RunId = await opts.d1SnapshotRunId();
+    if (mode === "full" && d1RunId) {
+      const why = state
+        ? `the local sync state cannot diff against it (marker ${state.runId}, ${derivedStateRows} state rows)`
+        : "the local sync marker (data/d1-sync-state.json) is missing";
+      throw new Error(
+        `refusing a full D1 sync: D1 already holds the snapshot of run ${d1RunId} and ${why}. ` +
+          `A full sync deletes every D1 table and exceeds the daily write budget. ` +
+          `Run "pipeline sync --bootstrap-state --run ${d1RunId}" against a local database whose newest run is ${d1RunId}, ` +
+          `or pass --full to rewrite D1 deliberately.`,
+      );
+    }
+    if (mode === "incremental" && d1RunId !== state?.runId)
+      throw new Error(
+        `D1 holds run ${d1RunId ?? "(none)"} but the local sync marker says ${state?.runId}; ` +
+          `bootstrap the state for the D1 run ("pipeline sync --bootstrap-state --run <run>") or pass --full.`,
+      );
+  }
   return {
     mode,
     changedRunIds: mode === "incremental" ? changedRunIds : [opts.runId],
