@@ -1,0 +1,12 @@
+{
+  "name": "pipeline",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/pipeline/src",
+  "projectType": "library",
+  "tags": [],
+  "targets": {
+    "typecheck": {
+      "command": "tsc -p {projectRoot}/tsconfig.lib.json --noEmit"
+    }
+  }
+}

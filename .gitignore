@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.nx/
+.wrangler/
+.env
+data/
+exports/
+*.duckdb
+*.duckdb.wal
+*.car
+coverage/
+.superpowers/
+vitest.config.*.timestamp*

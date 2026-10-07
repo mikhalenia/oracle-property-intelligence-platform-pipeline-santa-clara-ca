@@ -120,3 +120,7 @@ The pipeline must demonstrate that data is ingested on an ongoing basis (not a o
 - [Roofing CRM & Lead Identification UI](https://github.com/prismteam-ai/roofing-crm)
 - [Soofi XYZ Team Kit](https://github.com/soofi-xyz/soofi-xyz-team-kit)
 - [Elephant Oracle Skills](https://github.com/elephant-xyz/skills)
+
+## Candidate implementation
+
+The pipeline implementation lives in this repository (nx + pnpm + TypeScript). See `CLAUDE.md` for the layout and workflow, and `docs/superpowers/specs/2026-10-07-santa-clara-pipeline-design.md` for the design.
