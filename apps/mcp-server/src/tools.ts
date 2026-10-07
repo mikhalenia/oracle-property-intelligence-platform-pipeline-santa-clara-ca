@@ -19,7 +19,10 @@ const SPATIAL =
 const STATES =
   "Permit states: open (issued, still active), expired_unfinaled (expired without a final inspection, i.e. stalled), finaled (completed with a final inspection).";
 
-export function registerTools(server: McpServer, db: D1Database): void {
+type ToolEnv = { DB: D1Database; MANIFEST_GATEWAY: string };
+
+export function registerTools(server: McpServer, env: ToolEnv): void {
+  const db = env.DB;
   server.registerTool(
     "search_properties_in_radius",
     {
@@ -69,7 +72,7 @@ export function registerTools(server: McpServer, db: D1Database): void {
     "list_runs",
     {
       description:
-        "List pipeline run records, newest first: per-source fetch counts and source versions, totals, known limitations, and the manifest CID of each published snapshot.",
+        "List pipeline run records stored in the snapshot, newest first by runId. Each record has runId, timing, asOf, status, per-source fetch counts and source versions, row totals, known limitations, and manifestCid (the IPFS CID of that run's published manifest, or null if the run was never published). The manifest itself is not included; use get_manifest.",
       inputSchema: {},
     },
     async () => text(await q.runs(db)),
@@ -79,9 +82,9 @@ export function registerTools(server: McpServer, db: D1Database): void {
     "get_manifest",
     {
       description:
-        "The manifest of the latest published snapshot: per-table file CIDs, row counts and source versions, so any answer can be verified against IPFS. Falls back to { manifestCid } when the run record has no manifest.",
+        "The manifest of the snapshot currently served (its run is the snapshot's runId, else the newest run). Returns { runId, manifestCid, manifestUrl, manifest }: manifestUrl is <IPFS gateway>/ipfs/<manifestCid> and manifest is that JSON fetched live from the gateway (schema scc-manifest/1: county, publishedAt, previousManifestCid and artifacts with each file's cid, path, size and sha256), so answers can be verified against IPFS. If the run is unpublished or the gateway fetch fails, manifest is null and error explains why.",
       inputSchema: {},
     },
-    async () => text(await q.manifest(db)),
+    async () => text(await q.manifest(db, env.MANIFEST_GATEWAY, (url) => fetch(url))),
   );
 }

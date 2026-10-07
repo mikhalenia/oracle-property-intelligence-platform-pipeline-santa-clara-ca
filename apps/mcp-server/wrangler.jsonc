@@ -12,5 +12,6 @@
       "migrations_dir": "migrations",
     },
   ],
+  "vars": { "MANIFEST_GATEWAY": "https://ipfs.filebase.io" },
   "observability": { "enabled": true },
 }

@@ -2,6 +2,9 @@
 export const CENTER = { lat: 37.33, lon: -121.88 };
 
 const PARCELS_URL = "https://data.sccgov.org/parcels";
+export const MANIFEST = { schema: "scc-manifest/1", tables: [] };
+export const MANIFEST_URL = "https://ipfs.filebase.io/ipfs/bafy-manifest";
+
 const PERMITS_URL = "https://data.sanjoseca.gov/permits";
 
 export async function seed(db: D1Database): Promise<void> {
@@ -56,18 +59,16 @@ export async function seed(db: D1Database): Promise<void> {
     db.prepare(
       `INSERT INTO snapshot (id, run_id, manifest_cid, synced_at) VALUES (1, 'run-2', 'bafy-manifest', '2026-10-07T18:00:00Z')`,
     ),
-    db
-      .prepare(`INSERT INTO runs (run_id, record) VALUES (?1, ?2)`)
-      .bind(
-        "run-2",
-        JSON.stringify({
-          runId: "run-2",
-          manifestCid: "bafy-manifest",
-          manifest: { schema: "scc-manifest/1" },
-        }),
-      ),
-    db
-      .prepare(`INSERT INTO runs (run_id, record) VALUES (?1, ?2)`)
-      .bind("run-1", JSON.stringify({ runId: "run-1" })),
+    // Records as synced from DuckDB: `manifestCid` merged in (null when unpublished).
+    // run-3 is newer but unpublished; the snapshot points at run-2.
+    ...[
+      { runId: "run-1", manifestCid: "bafy-old" },
+      { runId: "run-2", manifestCid: "bafy-manifest" },
+      { runId: "run-3", manifestCid: null },
+    ].map((r) =>
+      db
+        .prepare(`INSERT INTO runs (run_id, record) VALUES (?1, ?2)`)
+        .bind(r.runId, JSON.stringify(r)),
+    ),
   ]);
 }

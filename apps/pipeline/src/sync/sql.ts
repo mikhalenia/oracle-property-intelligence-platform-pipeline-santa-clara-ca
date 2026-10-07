@@ -88,6 +88,20 @@ const TEXT_COLUMNS = new Set([
   "record",
 ]);
 
+/**
+ * DuckDB select expression for a D1 column. `runs.record` gets the run's `manifest_cid`
+ * merged in (publish only sets the column), so D1 consumers see `manifestCid` (null when unpublished).
+ */
+function selectExpr(table: D1Table, c: string): string {
+  if (table === "runs" && c === "record")
+    // JSON merge-patch deletes keys patched with null, so the unpublished case seeds the key instead.
+    return (
+      "CASE WHEN manifest_cid IS NULL THEN json_merge_patch(json_object('manifestCid', NULL), record) " +
+      "ELSE json_merge_patch(record, json_object('manifestCid', manifest_cid)) END::TEXT AS record"
+    );
+  return TEXT_COLUMNS.has(c) ? `${c}::TEXT AS ${c}` : c;
+}
+
 export function sqlLiteral(v: unknown): string {
   if (v === null || v === undefined) return "NULL";
   if (typeof v === "boolean") return v ? "1" : "0";
@@ -112,7 +126,7 @@ export async function* buildD1Statements(
 
   for (const table of D1_TABLES) {
     const cols = D1_COLUMNS[table];
-    const select = cols.map((c) => (TEXT_COLUMNS.has(c) ? `${c}::TEXT AS ${c}` : c)).join(", ");
+    const select = cols.map((c) => selectExpr(table, c)).join(", ");
     const orderBy = table === "owners" ? "apn, permit_number" : cols[0];
     const head = `INSERT INTO ${table} (${cols.join(", ")}) VALUES\n`;
     let pending: string[] = [];

@@ -1,6 +1,6 @@
 import { env, exports } from "cloudflare:workers";
-import { beforeAll, describe, expect, it } from "vitest";
-import { CENTER, seed } from "./test/seed";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { CENTER, MANIFEST, MANIFEST_URL, seed } from "./test/seed";
 
 const BASE = "http://worker.test";
 const get = (path: string) => exports.default.fetch(`${BASE}${path}`);
@@ -71,8 +71,41 @@ describe("REST", () => {
 
   it("GET /api/contractors/:id, /api/runs, /api/manifest", async () => {
     expect((await get("/api/contractors/acme-roofing")).status).toBe(200);
-    expect(((await (await get("/api/runs")).json()) as unknown[]).length).toBe(2);
-    expect(await (await get("/api/manifest")).json()).toEqual({ schema: "scc-manifest/1" });
+    expect(((await (await get("/api/runs")).json()) as unknown[]).length).toBe(3);
+  });
+
+  it("GET /api/manifest fetches the snapshot manifest from the gateway", async () => {
+    const fetchMock = vi.fn(async () => Response.json(MANIFEST));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const res = await get("/api/manifest");
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({
+        runId: "run-2",
+        manifestCid: "bafy-manifest",
+        manifestUrl: MANIFEST_URL,
+        manifest: MANIFEST,
+      });
+      expect(fetchMock).toHaveBeenCalledWith(MANIFEST_URL);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("GET /api/manifest returns 200 with manifest null and an error when the gateway fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("nope", { status: 504 })),
+    );
+    try {
+      const res = await get("/api/manifest");
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { manifest: unknown; error?: string };
+      expect(body.manifest).toBeNull();
+      expect(body.error).toMatch(/504/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("unknown route returns 404 JSON", async () => {

@@ -25,7 +25,8 @@ async function seed(): Promise<Db> {
   await db.run(`INSERT INTO owners VALUES ('A1','JOE','2020-05-01','P1',${src})`);
   await db.run(`INSERT INTO roof_age VALUES ('A1','2020-05-01',6,'issue','high','P1',${src})`);
   await db.run(
-    `INSERT INTO runs VALUES ('r1','2026-10-01 00:00:00',NULL,'2026-10-01','complete','{"runId":"r1"}',NULL,NULL)`,
+    `INSERT INTO runs VALUES ('r0','2026-09-01 00:00:00',NULL,'2026-09-01','complete','{"runId":"r0"}',NULL,NULL),
+     ('r1','2026-10-01 00:00:00',NULL,'2026-10-01','complete','{"runId":"r1"}','bafyRunCID',NULL)`,
   );
   return db;
 }
@@ -72,7 +73,10 @@ describe("buildD1Statements", () => {
     const permit = chunks.find((c) => c.startsWith("INSERT INTO permits "))!;
     expect(permit).toContain("'P1', 'A1', 'Final', 'done', 1,");
     expect(permit).toContain("'2020-05-01', NULL,");
-    expect(chunks.filter((c) => c.startsWith("INSERT INTO runs "))).toHaveLength(1);
+    const runs = chunks.filter((c) => c.startsWith("INSERT INTO runs "));
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toContain('"manifestCid":"bafyRunCID"');
+    expect(runs[0]).toMatch(/'r0', '\{[^']*"manifestCid":null/);
     const last = chunks[chunks.length - 1]!;
     expect(last).toContain(
       "INSERT INTO snapshot (id, run_id, manifest_cid, synced_at) VALUES (1, 'r1', 'bafyCID', '",

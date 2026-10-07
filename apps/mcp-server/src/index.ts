@@ -8,7 +8,7 @@ import * as q from "./queries";
 import { AgedRoofsQuery, OpenPermitsQuery, RadiusQuery } from "./schemas";
 import { registerTools } from "./tools";
 
-type Env = { Bindings: { DB: D1Database } };
+type Env = { Bindings: { DB: D1Database; MANIFEST_GATEWAY: string } };
 
 const app = new Hono<Env>();
 
@@ -42,11 +42,13 @@ app.get("/api/contractors/:id", async (c) => {
 });
 
 app.get("/api/runs", async (c) => c.json(await q.runs(c.env.DB)));
-app.get("/api/manifest", async (c) => c.json(await q.manifest(c.env.DB)));
+app.get("/api/manifest", async (c) =>
+  c.json(await q.manifest(c.env.DB, c.env.MANIFEST_GATEWAY, (url) => fetch(url))),
+);
 
 app.post("/mcp", async (c) => {
   const server = new McpServer({ name: "santa-clara-property-intelligence", version: "0.1.0" });
-  registerTools(server, c.env.DB);
+  registerTools(server, c.env);
   const transport = new StreamableHTTPTransport();
   await server.connect(transport);
   return transport.handleRequest(c);

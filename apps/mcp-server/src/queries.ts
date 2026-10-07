@@ -18,6 +18,8 @@ import {
 } from "./mappers";
 import type { AgedRoofsParams, OpenPermitsParams, RadiusParams } from "./schemas";
 
+export { manifest, runs } from "./runs";
+
 const MAX_CANDIDATES = 2000;
 
 /** Latest roofing permit per APN: open first, then newest issue_date, then permit_number. */
@@ -38,40 +40,56 @@ const LEAD_COLUMNS = `pr.apn, pr.situs_address, pr.situs_city, pr.situs_zip, pr.
   pr.fetched_at AS property_fetched_at,
   rp.source_url AS permit_source_url, rp.source_version AS permit_source_version`;
 
-/** `permitJoin` decides which permit a row carries: the latest roofing permit, or each matching permit. */
-function leadsFrom(permitJoin: string): string {
+/**
+ * `permitJoin` decides which permit a row carries: the latest roofing permit, or each matching permit.
+ * `source` is the property rows to start from: the table, or a pre-limited candidate subquery.
+ */
+function leadsFrom(permitJoin: string, source = "properties"): string {
   return `SELECT ${LEAD_COLUMNS}
-  FROM properties pr
+  FROM ${source} pr
   ${permitJoin}
   LEFT JOIN roof_age ra ON ra.apn = pr.apn
   LEFT JOIN contractors c ON c.contractor_id = rp.contractor_id
   LEFT JOIN owners o ON o.apn = pr.apn AND o.permit_number = ${LATEST_OWNER}`;
 }
 
-const LATEST_LEADS = leadsFrom(
-  `LEFT JOIN permits rp ON rp.permit_number = ${LATEST_ROOFING_PERMIT}`,
-);
+const LATEST_PERMIT_JOIN = `LEFT JOIN permits rp ON rp.permit_number = ${LATEST_ROOFING_PERMIT}`;
+const LATEST_LEADS = leadsFrom(LATEST_PERMIT_JOIN);
 const PERMIT_LEADS = leadsFrom(`JOIN permits rp ON rp.apn = pr.apn`);
 
 const IN_BOX = "pr.lat BETWEEN ?1 AND ?2 AND pr.lon BETWEEN ?3 AND ?4";
 /** Planar squared-distance proxy so the candidate LIMIT keeps the nearest rows. */
 const NEAREST = "((pr.lat - ?5) * (pr.lat - ?5) + (pr.lon - ?6) * (pr.lon - ?6) * ?7)";
 
+/**
+ * Radius has no selective filter besides the box, which at 25 miles covers most of the ~494k
+ * parcels. Joining first would run both correlated subqueries (latest permit, latest owner) for
+ * every parcel in the box before the LIMIT, so the nearest ?8 candidates are picked from
+ * `properties` alone (uses idx_properties_lat_lon) and only those rows are joined. The LIMIT keeps
+ * SQLite from flattening the subquery. Aged roofs and open permits stay join-first: their filters
+ * (roof_age, permit state) already restrict them to a few thousand rows.
+ */
+const RADIUS_CANDIDATES = `(SELECT * FROM properties pr WHERE ${IN_BOX} ORDER BY ${NEAREST} LIMIT ?8)`;
+export const RADIUS_SQL = spatialSql(leadsFrom(LATEST_PERMIT_JOIN, RADIUS_CANDIDATES), NEAREST);
+
+function spatialSql(from: string, orderBy: string, where?: string): string {
+  return `${from} WHERE ${where ? `${IN_BOX} AND ${where}` : IN_BOX} ORDER BY ${orderBy} LIMIT ?8`;
+}
+
 type Spatial = RadiusParams;
 
 async function spatialLeads(
   db: D1Database,
   p: Spatial,
-  sql: { from: string; where?: string; orderBy: string },
+  sql: string,
   extra: unknown[],
   sort: (a: Lead, b: Lead) => number,
 ): Promise<Lead[]> {
   const box = boundingBox(p, p.radiusMiles);
   const cosLat = Math.cos((p.lat * Math.PI) / 180);
-  const where = sql.where ? `${IN_BOX} AND ${sql.where}` : IN_BOX;
   const candidates = Math.min(p.limit * 4, MAX_CANDIDATES);
   const { results } = await db
-    .prepare(`${sql.from} WHERE ${where} ORDER BY ${sql.orderBy} LIMIT ?8`)
+    .prepare(sql)
     .bind(
       box.minLat,
       box.maxLat,
@@ -102,18 +120,14 @@ export async function snapshot(db: D1Database) {
 }
 
 export function radius(db: D1Database, p: RadiusParams): Promise<Lead[]> {
-  return spatialLeads(db, p, { from: LATEST_LEADS, orderBy: NEAREST }, [], byDistance);
+  return spatialLeads(db, p, RADIUS_SQL, [], byDistance);
 }
 
 export function agedRoofs(db: D1Database, p: AgedRoofsParams): Promise<Lead[]> {
   return spatialLeads(
     db,
     p,
-    {
-      from: LATEST_LEADS,
-      where: "ra.roof_age_years >= ?9",
-      orderBy: `ra.roof_age_years DESC, ${NEAREST}`,
-    },
+    spatialSql(LATEST_LEADS, `ra.roof_age_years DESC, ${NEAREST}`, "ra.roof_age_years >= ?9"),
     [p.minRoofAgeYears],
     (a, b) => (b.roofAgeYears ?? 0) - (a.roofAgeYears ?? 0) || byDistance(a, b),
   );
@@ -129,7 +143,7 @@ export function openPermits(db: D1Database, p: OpenPermitsParams): Promise<Lead[
   return spatialLeads(
     db,
     p,
-    { from: PERMIT_LEADS, where, orderBy: `rp.days_open DESC, ${NEAREST}` },
+    spatialSql(PERMIT_LEADS, `rp.days_open DESC, ${NEAREST}`, where),
     [states[0], states[1] ?? states[0], Math.ceil(p.minOpenYears * 365)],
     (a, b) => (b.daysOpen ?? 0) - (a.daysOpen ?? 0) || byDistance(a, b),
   );
@@ -194,20 +208,4 @@ export async function contractor(db: D1Database, id: string) {
       .all<PermitRow>(),
   ]);
   return { snapshot: snap, contractor: toContractor(row), permits: permits.results.map(toPermit) };
-}
-
-export async function runs(db: D1Database): Promise<unknown[]> {
-  const { results } = await db
-    .prepare("SELECT record FROM runs ORDER BY run_id DESC")
-    .all<{ record: string }>();
-  return results.map((r) => JSON.parse(r.record) as unknown);
-}
-
-export async function manifest(db: D1Database): Promise<unknown> {
-  const row = await db
-    .prepare("SELECT record FROM runs ORDER BY run_id DESC LIMIT 1")
-    .first<{ record: string }>();
-  const record = row ? (JSON.parse(row.record) as { manifest?: unknown }) : null;
-  if (record?.manifest) return record.manifest;
-  return { manifestCid: (await snapshot(db)).manifestCid };
 }

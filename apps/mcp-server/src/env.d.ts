@@ -4,6 +4,7 @@ declare global {
   namespace Cloudflare {
     interface Env {
       DB: D1Database;
+      MANIFEST_GATEWAY: string;
       TEST_MIGRATIONS: D1Migration[];
     }
     interface GlobalProps {

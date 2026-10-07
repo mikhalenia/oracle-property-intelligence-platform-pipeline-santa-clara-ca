@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import * as q from "./queries";
-import { CENTER, seed } from "./test/seed";
+import { CENTER, MANIFEST, MANIFEST_URL, seed } from "./test/seed";
 
 const base = { ...CENTER, radiusMiles: 5, limit: 200 };
 
@@ -37,6 +37,14 @@ describe("queries", () => {
         fetchedAt: "2026-10-07T17:00:00Z",
       },
     });
+  });
+
+  it("radius limits candidate parcels before joining permits and owners", async () => {
+    const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN ${q.RADIUS_SQL}`)
+      .bind(37, 38, -122, -121, 37.33, -121.88, 0.63, 8)
+      .all<{ detail: string }>();
+    const plan = results.map((r) => r.detail).join("\n");
+    expect(plan).toMatch(/CO-ROUTINE|MATERIALIZE/);
   });
 
   it("agedRoofs returns only roofs at least the minimum age", async () => {
@@ -125,9 +133,51 @@ describe("queries", () => {
     expect(await q.contractor(env.DB, "nope")).toBeNull();
   });
 
-  it("runs newest first and manifest from newest run", async () => {
-    const runs = await q.runs(env.DB);
-    expect(runs.map((r) => (r as { runId: string }).runId)).toEqual(["run-2", "run-1"]);
-    expect(await q.manifest(env.DB)).toEqual({ schema: "scc-manifest/1" });
+  it("runs newest first, each carrying manifestCid", async () => {
+    const runs = (await q.runs(env.DB)) as { runId: string; manifestCid: string | null }[];
+    expect(runs.map((r) => r.runId)).toEqual(["run-3", "run-2", "run-1"]);
+    expect(runs[1]!.manifestCid).toBe("bafy-manifest");
+  });
+
+  it("manifest resolves the snapshot run and fetches the manifest from the gateway", async () => {
+    const urls: string[] = [];
+    const fetcher = async (url: string) => {
+      urls.push(url);
+      return Response.json(MANIFEST);
+    };
+    expect(await q.manifest(env.DB, "https://ipfs.filebase.io", fetcher)).toEqual({
+      runId: "run-2",
+      manifestCid: "bafy-manifest",
+      manifestUrl: MANIFEST_URL,
+      manifest: MANIFEST,
+    });
+    expect(urls).toEqual([MANIFEST_URL]);
+  });
+
+  it("manifest reports gateway failures as manifest null with an error", async () => {
+    const failing = async () => new Response("bad gateway", { status: 502 });
+    const r = await q.manifest(env.DB, "https://ipfs.filebase.io", failing);
+    expect(r).toMatchObject({ runId: "run-2", manifestCid: "bafy-manifest", manifest: null });
+    expect(r.error).toMatch(/502/);
+    const throwing = async (): Promise<Response> => {
+      throw new Error("network down");
+    };
+    expect((await q.manifest(env.DB, "https://ipfs.filebase.io", throwing)).error).toMatch(
+      /network down/,
+    );
+  });
+
+  it("manifest falls back to the newest run when there is no snapshot row", async () => {
+    await env.DB.prepare("DELETE FROM snapshot").run();
+    const r = await q.manifest(env.DB, "https://ipfs.filebase.io", async () =>
+      Response.json(MANIFEST),
+    );
+    expect(r).toMatchObject({
+      runId: "run-3",
+      manifestCid: null,
+      manifestUrl: null,
+      manifest: null,
+    });
+    expect(r.error).toMatch(/not published/);
   });
 });
