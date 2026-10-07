@@ -126,11 +126,11 @@ The pipeline must demonstrate that data is ingested on an ongoing basis (not a o
 ### Live URLs
 
 - REST and MCP API (Cloudflare Worker): https://scc-pipeline-api.mikhalenia-a.workers.dev (`/api/health`, `/api/runs`, `/api/manifest`, `/api/properties/radius`, `/api/leads/aged-roofs`, `/api/leads/open-permits`, `/api/properties/:apn`, `/api/contractors/:id`, `POST /mcp`)
-- Explorer UI (Cloudflare Pages, planned URL, deployed after this section was written): https://scc-explorer.pages.dev
+- Explorer UI (Cloudflare Worker with static assets): https://scc-explorer.mikhalenia-a.workers.dev
 
 ### What was built
 
-An nx + pnpm + TypeScript pipeline that loads Santa Clara County parcels (County open data, Socrata) and City of San José building permits (CKAN CSVs) into DuckDB with per-record provenance and hash-based change detection, derives roofing flags, permit states, contractors, observed owners and roof age from roofing permits, exports Parquet, publishes the export as a CIDv1 UnixFS directory plus CAR to Filebase, verifies retrieval from public gateways, and syncs a snapshot to Cloudflare D1. A Worker serves the snapshot over REST and MCP (seven tools), and an Explorer app shows runs, sources, the manifest and a DuckDB-WASM SQL panel. Two runs exist so far (see `docs/runs/`). Coverage is limited: permits are San José only, and owner, year built and BBB data are not available from free sources. See `docs/limitations.md`.
+An nx + pnpm + TypeScript pipeline that loads Santa Clara County parcels (County open data, Socrata) and City of San José building permits (CKAN CSVs) into DuckDB with per-record provenance and hash-based change detection, derives roofing flags, permit states, contractors, observed owners and roof age from roofing permits, exports Parquet, publishes the export as a CIDv1 UnixFS directory plus CAR to Filebase, verifies retrieval from public gateways, and syncs a snapshot to Cloudflare D1. A Worker serves the snapshot over REST and MCP (seven tools), and an Explorer app shows runs, sources, the manifest and a DuckDB-WASM SQL panel. Two runs have been executed. Run 1 (`2026-10-07T17-05-59Z`, partial: permits loaded, parcels failed) is visible only via `GET /api/runs` and in the `runs.json` artifact published inside the snapshot; run 2 (`2026-10-07T17-10-54Z`) is the first published run and the only record in `docs/runs/`. Coverage is limited: permits are San José only, and owner, year built and BBB data are not available from free sources. See `docs/limitations.md`.
 
 ### Architecture
 
@@ -138,11 +138,11 @@ An nx + pnpm + TypeScript pipeline that loads Santa Clara County parcels (County
 - `libs/sources`: Socrata and CKAN fetchers that attach provenance (source key, URL, version, fetch time, page SHA-256, record hash)
 - `libs/domain`: pure rules (APN normalization, roofing classifier, permit state, roof age, contractor names, geo)
 - `apps/mcp-server`: Cloudflare Worker (Hono, MCP Streamable HTTP at `/mcp`, same handlers as REST) over D1
-- `apps/explorer`: React + MUI + Vite on Cloudflare Pages, DuckDB-WASM reading published Parquet by CID
+- `apps/explorer`: React + MUI + Vite on Cloudflare (Worker with static assets), DuckDB-WASM reading published Parquet by CID
 - Storage: DuckDB locally; Parquet and CAR on IPFS via Filebase; D1 holds the served snapshot
 - Scheduling: `.github/workflows/ingest.yml`, daily at 00:30 UTC (after San José's 16:00 PT refresh) and on demand
 
-Deviation from the team kit's Golden Path: Cloudflare (Workers, D1, Pages) instead of AWS/CDK, because the assignment requires zero idle cost for Oracle. Everything is serverless and nothing runs always-on.
+Deviation from the team kit's Golden Path: Cloudflare (Workers, D1, static assets) instead of AWS/CDK, because the assignment requires zero idle cost for Oracle. Everything is serverless and nothing runs always-on.
 
 ### Reproduce locally
 

@@ -15,7 +15,7 @@ and the Explorer):
 - BBB ratings are not publicly downloadable; bbb_rating is always null.
 
 A source that fails during a run adds its own entry and marks the run `partial` (run 1,
-`2026-10-07T17-05-59Z`: parcels page read failed, permits loaded).
+`2026-10-07T17-05-59Z`: parcels page read failed, permits loaded). Run 1 has no record in `docs/runs/`; it is visible via `GET /api/runs` and in the `runs.json` artifact published inside the snapshot.
 
 ## By acceptance criterion
 
@@ -44,8 +44,8 @@ A source that fails during a run adds its own entry and marks the run `partial` 
 The assignment asks for retrieval from at least two independent public gateways. Observed on
 2026-10-07:
 
-- `ipfs.io`, `dweb.link`, `w3s.link` and `gateway.ipfs.io` answered HTTP 429 with a "switching to a service worker gateway" message to non-browser clients, so scripted verification cannot use them. They may work in a browser.
-- Working independent gateways: `gateway.pinata.cloud`, `ipfs.ssi.eecc.de`, `ipfs.raribleuserdata.com`.
+- `ipfs.io`, `dweb.link` and `w3s.link` answered HTTP 429 with a "switching to a service worker gateway" message on files, and 522 on the directory root, to non-browser clients, so scripted verification cannot use them. They may work in a browser.
+- Working independent gateways: `gateway.pinata.cloud` and `ipfs.raribleuserdata.com` returned 200 on every artifact in run 2's verification. `ipfs.ssi.eecc.de` is intermittent: it timed out on the directory root, `properties.parquet` and the CAR.
 - `ipfs.filebase.io` is the pinning vendor's gateway; it is not counted as independent.
 
 The `verify` command probes the list in `apps/pipeline/src/publish/gateways.ts` and records

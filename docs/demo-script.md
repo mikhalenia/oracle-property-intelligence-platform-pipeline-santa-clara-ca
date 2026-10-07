@@ -5,7 +5,7 @@ deployment.
 
 ```sh
 API=https://scc-pipeline-api.mikhalenia-a.workers.dev
-EXPLORER=https://scc-explorer.pages.dev   # planned URL; Cloudflare Pages deploy happens after this doc was written
+EXPLORER=https://scc-explorer.mikhalenia-a.workers.dev
 ```
 
 Steps marked **[Explorer]** depend on the Explorer deploy. Each has a REST or file equivalent
@@ -15,7 +15,7 @@ run will show newer numbers.
 ## 0. Introduction
 
 Say the presenter line from the transcript. Everything below is served from free tiers:
-Cloudflare Workers, D1 and Pages for access, Filebase plus the public IPFS network for storage,
+Cloudflare Workers, D1 and static assets for access, Filebase plus the public IPFS network for storage,
 GitHub Actions for scheduling. Nothing is always-on.
 
 ## 1. Pipeline run summary
@@ -52,13 +52,13 @@ GitHub Actions for scheduling. Nothing is always-on.
   ```
 
   (`ipfs.raribleuserdata.com` also worked.) Compare `content-length` and the SHA-256 of the body with the manifest.
-- Note: `ipfs.io`, `dweb.link`, `w3s.link` and `gateway.ipfs.io` answered 429 "switching to a service worker gateway" to non-browser clients on 2026-10-07; `ipfs.filebase.io` is the vendor and does not count as independent. See `docs/limitations.md`.
+- Note: `ipfs.io`, `dweb.link` and `w3s.link` answered 429 "switching to a service worker gateway" on files and 522 on the directory root to non-browser clients on 2026-10-07; `ipfs.ssi.eecc.de` is intermittent (it timed out on the directory root, `properties.parquet` and the CAR in run 2's verification), while `gateway.pinata.cloud` and `ipfs.raribleuserdata.com` returned 200 on everything; `ipfs.filebase.io` is the vendor and does not count as independent. See `docs/limitations.md`.
 - Recorded results: `verification` in `docs/runs/<run_id>.json`. Re-run with `pnpm nx run pipeline:cli -- verify` (needs the local export of that run).
 
 ## 6. A later publish produces a new CID
 
-- `curl -s $API/api/runs | jq` and show the two runs with different manifest CIDs, and `previousManifestCid` in the manifest of the later one.
-- Show `docs/runs/*.json` in the repository: past records are never rewritten. Run 1 was partial and run 2 followed it; the scheduled `ingest` workflow adds one record per day.
+- `curl -s $API/api/runs | jq` and show both runs (run 1 is partial and was not published; run 2 is the first published run, so its manifest has `previousManifestCid: null`).
+- Show `docs/runs/*.json` in the repository: past records are never rewritten. Only run 2 has a record there; run 1 is visible via `/api/runs` and in the `runs.json` artifact inside the snapshot. The scheduled `ingest` workflow adds one record per run, and its manifest will carry a new CID and point to run 2's as `previousManifestCid`.
 - The snapshot root is a directory; its CAR is listed in the manifest.
 
 ## 7. Aged roofs in a radius (UI)
