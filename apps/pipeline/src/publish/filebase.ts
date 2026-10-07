@@ -9,6 +9,11 @@ export type Uploader = {
   headCid(key: string): Promise<string>;
 };
 
+function isNotFound(err: unknown): boolean {
+  const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+  return e?.name === "NotFound" || e?.$metadata?.httpStatusCode === 404;
+}
+
 export function filebaseUploader(env: { accessKey: string; secretKey: string; bucket: string }): Uploader {
   const client = new S3Client({
     endpoint: "https://s3.filebase.com",
@@ -31,8 +36,13 @@ export function filebaseUploader(env: { accessKey: string; secretKey: string; bu
     async headCid(key) {
       let waited = 0;
       for (let i = 0; i < 20; i++) {
-        const head = await client.send(new HeadObjectCommand({ Bucket: env.bucket, Key: key }));
-        const cid = head.Metadata?.["cid"];
+        const head = await client
+          .send(new HeadObjectCommand({ Bucket: env.bucket, Key: key }))
+          .catch((err: unknown) => {
+            if (isNotFound(err)) return undefined;
+            throw err;
+          });
+        const cid = head?.Metadata?.["cid"];
         if (cid) return CID.parse(cid).toV1().toString();
         const delay = Math.min(15_000, 3_000 + i * 1_000);
         waited += delay;

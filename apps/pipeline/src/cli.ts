@@ -1,12 +1,14 @@
 import { config } from "dotenv";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exportRun } from "./commands/export";
 import { ingest } from "./commands/ingest";
 import { publish } from "./commands/publish";
+import { verifyManifest } from "./commands/verify";
 import { applySchema, openDb } from "./db/duck";
 import { filebaseUploader } from "./publish/filebase";
+import type { Manifest } from "./publish/manifest";
 import { newRunId } from "./run-id";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -79,7 +81,39 @@ async function main(): Promise<void> {
     }
     return;
   }
-  if (["verify", "sync", "run"].includes(cmd)) {
+  if (cmd === "verify") {
+    const exportDir = process.env["SCC_EXPORT_DIR"] ?? join(repoRoot, "exports");
+    const db = await openDb(dbPath);
+    let runId: string;
+    try {
+      await applySchema(db);
+      const latest = (
+        await db.all<{ run_id: string }>("SELECT run_id FROM runs ORDER BY started_at DESC LIMIT 1")
+      )[0];
+      if (!latest) throw new Error("no runs found; run ingest first");
+      runId = latest.run_id;
+    } finally {
+      await db.close();
+    }
+    const manifestPath = join(exportDir, runId, "manifest.json");
+    let manifest: Manifest;
+    try {
+      manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Manifest;
+    } catch {
+      throw new Error(`no manifest for run ${runId} at ${manifestPath}; run publish first`);
+    }
+    const report = await verifyManifest(manifest, fetch);
+    await writeFile(join(exportDir, runId, "verification.json"), JSON.stringify(report, null, 2));
+    const runFile = join(repoRoot, "docs/runs", `${runId}.json`);
+    const record = JSON.parse(await readFile(runFile, "utf8")) as Record<string, unknown>;
+    await writeFile(runFile, JSON.stringify({ ...record, verification: report }, null, 2));
+    for (const a of report.artifacts)
+      console.log(`${a.name} ${a.cid} ${a.independentOk}/${report.gateways.length}`);
+    console.log(report.ok ? "verification ok" : "verification FAILED");
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
+  if (["sync", "run"].includes(cmd)) {
     console.log(`${cmd}: not implemented yet`);
     return;
   }
