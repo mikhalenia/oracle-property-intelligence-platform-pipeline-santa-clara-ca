@@ -13,7 +13,7 @@
 - Published snapshot (IPFS): manifest `bafybeihabollsxvyqj2vnhhhh6w3ouygh6pvhdjrg2nx4i5u63gjdlom64`, e.g. https://gateway.pinata.cloud/ipfs/bafybeihabollsxvyqj2vnhhhh6w3ouygh6pvhdjrg2nx4i5u63gjdlom64
 - No credentials are needed to read either. The sibling CRM is in a separate PR (see the roofing-crm PR).
 
-**Demo video:** Coming soon (will be linked before this PR is marked ready).
+**Demo video:** https://youtu.be/viPqfGyRKec
 
 ## How to review in 2 minutes
 
